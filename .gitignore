@@ -1,0 +1,4 @@
+data/checkpoints/
+fetch_names.py
+node_modules/
+.DS_Store
