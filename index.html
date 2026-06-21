@@ -126,36 +126,37 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 .card-skip{position:absolute;top:14px;right:14px;background:rgba(0,0,0,.25);border:none;border-radius:8px;color:rgba(255,255,255,.7);font-size:12px;padding:6px 11px;cursor:pointer;z-index:2;transition:all .15s}
 .card-skip:hover{background:rgba(0,0,0,.45);color:white}
 .card-idx{position:absolute;top:14px;left:16px;font-size:11px;font-weight:700;color:rgba(255,255,255,.5);z-index:2;letter-spacing:.05em}
-@keyframes card-in{from{transform:translateY(22px) scale(.95);opacity:0}to{transform:none;opacity:1}}
+@keyframes card-in{from{transform:translateY(16px) scale(.97)}to{transform:none}}
 @keyframes fly-left{
-  0%  {transform:rotate(0deg) translateX(0)}
-  100%{transform:rotate(-28deg) translateX(-150%);opacity:0}
+  0%  {transform:translateX(0) rotate(0deg);opacity:1}
+  100%{transform:translateX(-140%) rotate(-22deg);opacity:0}
 }
 @keyframes fly-right{
-  0%  {transform:rotate(0deg) translateX(0)}
-  100%{transform:rotate(28deg) translateX(150%);opacity:0}
+  0%  {transform:translateX(0) rotate(0deg);opacity:1}
+  100%{transform:translateX(140%) rotate(22deg);opacity:0}
 }
 @keyframes fly-skip{
-  0%  {transform:rotate(0deg) translateY(0)}
-  30% {transform:rotate(-6deg) translateY(-15%)}
-  100%{transform:rotate(-18deg) translateX(-60%) translateY(-90%);opacity:0}
+  0%  {transform:translateY(0) rotate(0deg);opacity:1}
+  35% {transform:translateY(-18%) rotate(-8deg);opacity:1}
+  100%{transform:translateY(-115%) rotate(-18deg);opacity:0}
 }
-.name-card{animation:card-in .3s cubic-bezier(.22,.68,0,1.2);transform-origin:50% 85%}
-.name-card.fly-left{animation:fly-left .32s cubic-bezier(.4,0,1,1) forwards!important}
-.name-card.fly-right{animation:fly-right .32s cubic-bezier(.4,0,1,1) forwards!important}
-.name-card.fly-up{animation:fly-skip .32s cubic-bezier(.4,0,1,1) forwards!important}
+.name-card{animation:card-in .22s ease-out;transform-origin:50% 30%}
+.name-card.fly-left{animation:fly-left .28s cubic-bezier(.4,0,1,1) forwards!important}
+.name-card.fly-right{animation:fly-right .28s cubic-bezier(.4,0,1,1) forwards!important}
+.name-card.fly-up{animation:fly-skip .28s cubic-bezier(.4,0,1,1) forwards!important}
 .home-tabs{display:flex;background:var(--surface2);border-radius:12px;padding:3px;margin-bottom:20px}
 .home-tab{flex:1;padding:9px 4px;border-radius:9px;border:none;background:transparent;color:var(--t2);font-size:13px;font-weight:600;cursor:pointer;transition:all .15s}
 .home-tab.active{background:var(--surface);color:var(--text);box-shadow:0 1px 4px rgba(0,0,0,.2)}
-.card-deck{flex:1;position:relative;min-height:0;padding-bottom:14px}
-.card-wrap{position:absolute;top:0;left:0;right:0;bottom:14px;overflow:hidden;border-radius:24px;display:flex;flex-direction:column}
-.card-ghost{position:absolute;border-radius:22px;pointer-events:none}
-.card-ghost-1{top:4px;left:2.5%;right:2.5%;bottom:-12px;transform:rotate(-2deg)}
-.card-ghost-2{top:8px;left:5%;right:5%;bottom:-20px;transform:rotate(2.5deg)}
+.card-deck{flex:1;position:relative;min-height:0;overflow:visible;z-index:1}
+.card-wrap{position:absolute;inset:0;border-radius:24px;display:flex;flex-direction:column;overflow:hidden}
+.card-current{z-index:2}
+.card-next{z-index:1;transform:rotate(-2deg) scale(.96) translateY(7px);transition:transform .25s cubic-bezier(.22,.68,0,1.1);transform-origin:center}
+.card-next.rising{transform:none}
+.card-next .card-overlay{opacity:.4}
 
-.rating-section{flex-shrink:0;margin-top:12px}
+.rating-section{flex-shrink:0;margin-top:12px;position:relative;z-index:3}
 .rating-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px}
-.r-btn{display:flex;flex-direction:column;align-items:center;gap:5px;padding:11px 4px;border-radius:14px;border:2px solid var(--border);background:var(--surface);cursor:pointer;transition:all .15s}
+.r-btn{display:flex;flex-direction:column;align-items:center;gap:5px;padding:11px 4px;border-radius:14px;border:2px solid var(--border);background:var(--surface);cursor:pointer;transition:all .15s;outline:none}
 .r-btn:hover{border-color:var(--accent)}
 .r-btn.active{border-color:white;background:rgba(255,255,255,.1);transform:scale(1.04)}
 .r-emoji{font-size:22px;line-height:1}
@@ -709,16 +710,35 @@ async function renderVoting(spaceId) {
   renderVotingCard(spaceId)
 }
 
+function buildCardWrap(nameData, extraCls) {
+  const idx = state.names.findIndex(n => n.name === nameData.name)
+  const [c1, c2] = CARD_BG[idx % CARD_BG.length]
+  return `<div class="card-wrap${extraCls ? ' ' + extraCls : ''}">
+      <div class="name-card" style="background:linear-gradient(145deg,${c1},${c2})">
+        <div class="card-overlay"></div>
+        <button class="card-skip" data-action="skip">Пропустить</button>
+        <div class="card-idx">#${idx + 1}</div>
+        <div class="card-content">
+          <div class="card-name">${esc(nameData.name)}</div>
+          ${nameData.meaning ? `<div class="card-meaning">${esc(nameData.meaning)}</div>` : ''}
+          ${nameData.origin ? `<div class="card-origin">${esc(nameData.origin)}</div>` : ''}
+          ${(nameData.meaning || nameData.origin) && (nameData.nicknames?.length || nameData.funFact) ? '<div class="card-divider"></div>' : ''}
+          ${nameData.nicknames?.length ? `<div class="card-nicknames">👥 ${nameData.nicknames.map(esc).join(' · ')}</div>` : ''}
+          ${nameData.funFact ? `<div class="card-fact">${esc(nameData.funFact)}</div>` : ''}
+        </div>
+      </div>
+    </div>`
+}
+
 function renderVotingCard(spaceId) {
   const queue = getVotingQueue()
   const total = state.names.length
-  const voted = total - queue.length
+  const voted = Object.keys(state.votes).length
 
   if (queue.length === 0) { renderDone(spaceId, total); return }
 
   const current = queue[0]
-  const nameIndex = state.names.findIndex(n => n.name === current.name)
-  const [c1, c2] = CARD_BG[nameIndex % CARD_BG.length]
+  const next = queue[1]
   const pct = (voted / total * 100).toFixed(1)
   const isCreator = state.space?.creatorUid === state.user?.uid
 
@@ -726,29 +746,14 @@ function renderVotingCard(spaceId) {
     ${navHtml(esc(state.space?.title || 'Голосование'), '/')}
     <div class="voting-view view">
       <div class="voting-top">
-        <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
-        <div class="progress-text">${voted}/${total}</div>
+        <div class="progress-bar"><div id="prog-fill" class="progress-fill" style="width:${pct}%"></div></div>
+        <div id="prog-text" class="progress-text">${voted}/${total}</div>
         <a class="history-link" data-nav="/space/${spaceId}/history">История</a>
         ${isCreator ? `<a class="history-link" data-nav="/space/${spaceId}/admin">⚙</a>` : ''}
       </div>
-      <div class="card-deck">
-      <div class="card-ghost card-ghost-2" style="background:linear-gradient(145deg,${c1}55,${c2}55)"></div>
-      <div class="card-ghost card-ghost-1" style="background:linear-gradient(145deg,${c1}88,${c2}88)"></div>
-      <div class="card-wrap">
-      <div class="name-card" style="background:linear-gradient(145deg,${c1},${c2})">
-        <div class="card-overlay"></div>
-        <button class="card-skip" data-action="skip">Пропустить</button>
-        <div class="card-idx">#${nameIndex + 1}</div>
-        <div class="card-content">
-          <div class="card-name">${esc(current.name)}</div>
-          ${current.meaning ? `<div class="card-meaning">${esc(current.meaning)}</div>` : ''}
-          ${current.origin ? `<div class="card-origin">${esc(current.origin)}</div>` : ''}
-          ${(current.meaning || current.origin) && (current.nicknames?.length || current.funFact) ? '<div class="card-divider"></div>' : ''}
-          ${current.nicknames?.length ? `<div class="card-nicknames">👥 ${current.nicknames.map(esc).join(' · ')}</div>` : ''}
-          ${current.funFact ? `<div class="card-fact">${esc(current.funFact)}</div>` : ''}
-        </div>
-      </div>
-      </div>
+      <div class="card-deck" id="card-deck">
+        ${next ? buildCardWrap(next, 'card-next') : ''}
+        ${buildCardWrap(current, 'card-current')}
       </div>
       <div class="rating-section">
         <div class="rating-grid">
@@ -764,45 +769,109 @@ function renderVotingCard(spaceId) {
 
   bindNav()
   setSyncStatus(state.syncStatus, state.pendingCount)
+  setupVotingHandlers(spaceId)
+}
 
-  let selected = null
+function setupVotingHandlers(spaceId) {
+  const sel = { value: null }
   document.querySelectorAll('.r-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      selected = +btn.dataset.score
+    btn.onclick = () => {
+      sel.value = +btn.dataset.score
       document.querySelectorAll('.r-btn').forEach(b => b.classList.toggle('active', b === btn))
       document.getElementById('btn-next').disabled = false
-    })
+    }
   })
+  const skipBtn = document.querySelector('.card-current .card-skip')
+  if (skipBtn) skipBtn.onclick = () => advanceCard(spaceId, false, null, sel)
+  document.getElementById('btn-next').onclick = () => {
+    if (sel.value === null) return
+    advanceCard(spaceId, true, sel.value, sel)
+  }
+}
 
-  function flyCard(dir) {
-    return new Promise(resolve => {
-      const card = document.querySelector('.name-card')
-      if (!card) return resolve()
-      card.classList.remove('fly-left', 'fly-right', 'fly-up')
-      void card.offsetWidth // force reflow so animation restarts
-      card.classList.add('fly-' + dir)
-      let done = false
-      const finish = () => { if (!done) { done = true; resolve() } }
-      card.addEventListener('animationend', finish, { once: true })
-      setTimeout(finish, 350) // fallback if animation events disabled
-    })
+async function advanceCard(spaceId, isVote, score, sel) {
+  // Lock UI to prevent double-fire
+  const nextBtn = document.getElementById('btn-next')
+  if (nextBtn) nextBtn.onclick = null
+  document.querySelectorAll('.r-btn').forEach(b => { b.onclick = null; b.style.pointerEvents = 'none' })
+  const skipBtn = document.querySelector('.card-current .card-skip')
+  if (skipBtn) { skipBtn.onclick = null; skipBtn.disabled = true }
+
+  const queue = getVotingQueue()
+  const current = queue[0]
+  if (!current) return
+  const dir = isVote ? (score <= 2 ? 'left' : score >= 4 ? 'right' : 'left') : 'up'
+  const deck = document.getElementById('card-deck')
+
+  // Fly current out, rise next card simultaneously — no re-render gap
+  await flyAndAdvance(dir, deck)
+
+  if (isVote) {
+    await doVote(spaceId, current.name, score)
+  } else {
+    state.skips.add(current.name)
   }
 
-  document.getElementById('btn-next').addEventListener('click', async () => {
-    if (selected === null) return
-    document.getElementById('btn-next').disabled = true
-    document.querySelectorAll('.r-btn').forEach(b => b.style.pointerEvents = 'none')
-    const dir = selected <= 2 ? 'left' : selected >= 4 ? 'right' : 'left'
-    await flyCard(dir)
-    await doVote(spaceId, current.name, selected)
-    renderVotingCard(spaceId)
-  })
+  const newQueue = getVotingQueue()
+  if (!newQueue.length) { renderDone(spaceId, state.names.length); return }
 
-  document.querySelector('[data-action="skip"]').addEventListener('click', async () => {
-    document.querySelector('[data-action="skip"]').disabled = true
-    await flyCard('up')
-    state.skips.add(current.name)
-    renderVotingCard(spaceId)
+  // Update progress bar in-place
+  const newVoted = Object.keys(state.votes).length
+  const total = state.names.length
+  const fill = document.getElementById('prog-fill')
+  const txt = document.getElementById('prog-text')
+  if (fill) fill.style.width = `${(newVoted / total * 100).toFixed(1)}%`
+  if (txt) txt.textContent = `${newVoted}/${total}`
+
+  // Pre-render next card behind the new current
+  const newNext = newQueue[1]
+  if (newNext && deck) {
+    const tmp = document.createElement('div')
+    tmp.innerHTML = buildCardWrap(newNext, 'card-next')
+    deck.insertBefore(tmp.firstElementChild, deck.firstChild)
+  }
+
+  // Reset rating buttons
+  document.querySelectorAll('.r-btn').forEach(b => {
+    b.classList.remove('active')
+    b.style.pointerEvents = ''
+  })
+  if (nextBtn) nextBtn.disabled = true
+
+  setupVotingHandlers(spaceId)
+}
+
+function flyAndAdvance(dir, deck) {
+  return new Promise(resolve => {
+    const currentWrap = deck?.querySelector('.card-current')
+    const nextWrap = deck?.querySelector('.card-next')
+    const currentCard = currentWrap?.querySelector('.name-card')
+    if (!currentCard) { resolve(); return }
+
+    // Start fly on current card
+    currentCard.classList.remove('fly-left', 'fly-right', 'fly-up')
+    void currentCard.offsetWidth
+    currentCard.classList.add('fly-' + dir)
+
+    // Simultaneously scale next card up to full size
+    if (nextWrap) {
+      void nextWrap.offsetWidth
+      nextWrap.classList.add('rising')
+    }
+
+    let done = false
+    const finish = () => {
+      if (done) return
+      done = true
+      currentWrap.remove()
+      if (nextWrap) {
+        nextWrap.classList.remove('rising', 'card-next')
+        nextWrap.classList.add('card-current')
+      }
+      resolve()
+    }
+    currentCard.addEventListener('animationend', finish, { once: true })
+    setTimeout(finish, 320)
   })
 }
 
