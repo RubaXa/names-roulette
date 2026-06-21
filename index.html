@@ -956,14 +956,11 @@ function renderNewSpace() {
         : `${count} из ${totalNames} имён`
   }
 
-  document.querySelectorAll('.origin-chip').forEach(chip => {
-    chip.addEventListener('click', () => {
-      const cb = chip.querySelector('input')
-      cb.checked = !cb.checked
-      chip.classList.toggle('checked', cb.checked)
+  document.querySelectorAll('.origin-chips input').forEach(cb => {
+    cb.addEventListener('change', () => {
+      cb.closest('.origin-chip').classList.toggle('checked', cb.checked)
       updateCount()
     })
-    chip.querySelector('input').addEventListener('click', e => e.stopPropagation())
   })
 
   document.getElementById('btn-create').addEventListener('click', async () => {
