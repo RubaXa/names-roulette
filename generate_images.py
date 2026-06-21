@@ -2,6 +2,19 @@
 """Generate cover images for name cards using FLUX schnell via fal.ai."""
 import urllib.request, json, os, time, glob, sys
 
+def _load_env_local():
+    path = os.path.join(os.path.dirname(__file__), '.env.local')
+    if not os.path.exists(path):
+        return
+    with open(path) as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith('#') and '=' in line:
+                k, _, v = line.partition('=')
+                os.environ.setdefault(k.strip(), v.strip())
+
+_load_env_local()
+
 FAL_KEY = os.environ['FAL_KEY']
 PROXY = os.environ.get('HTTPS_PROXY_OVERRIDE', '')  # optional: external proxy to bypass corporate CDN blocks
 OUT_DIR = os.path.join(os.path.dirname(__file__), 'data/images')

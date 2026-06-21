@@ -1,3 +1,4 @@
+.env.local
 data/checkpoints/
 fetch_names.py
 node_modules/
