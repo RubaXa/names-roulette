@@ -276,18 +276,6 @@ const RATINGS = [
 ]
 const RATING_COLORS = ['#c0392b','#e67e22','#4a90e2','#e91e63']
 
-// Approximate real-world popularity (0=rare/unique, 1=very common in Russia)
-const NAME_POPULARITY = {
-  'Анна':1,'Мария':1,'Елена':0.95,'Ольга':0.9,'Наталья':0.9,'Ирина':0.85,
-  'Светлана':0.8,'Татьяна':0.8,'Екатерина':0.8,'Людмила':0.75,'Надежда':0.75,
-  'Анастасия':0.75,'Александра':0.7,'Юлия':0.7,'Нина':0.65,'Галина':0.65,
-  'Валентина':0.65,'Дарья':0.6,'Виктория':0.6,'Вера':0.6,'Зинаида':0.55,
-  'Лариса':0.55,'Тамара':0.55,'Алина':0.55,'Полина':0.55,'Соня':0.5,
-  'Кристина':0.5,'Ксения':0.5,'Вероника':0.5,'Алёна':0.5,'Валерия':0.5,
-  'Диана':0.45,'Маргарита':0.45,'Варвара':0.4,'Карина':0.4,'Ангелина':0.4,
-  'Милана':0.4,'Мила':0.4,'Дарина':0.35,
-}
-
 function clampScore(s) { return Math.min(Math.max(Math.round(s), 1), RATINGS.length) }
 
 const CARD_BG = [
@@ -303,7 +291,6 @@ const state = {
   user: null,
   names: [],       // enriched name objects
   votes: {},       // { name: score } for current space (loaded per space)
-  skips: new Set(), // names skipped this session
   queue: [],       // shuffled name order for current session
   history: [],     // [{name, isVote, score}] for undo
   pendingReview: null, // {name, originalScore} when going back to a voted card
@@ -342,13 +329,19 @@ const gProvider = new GoogleAuthProvider()
 let _db
 async function getDB() {
   if (_db) return _db
-  _db = await openDB('names-roulette', 1, {
-    upgrade(db) {
-      db.createObjectStore('spaces', { keyPath: 'id' })
-      const votes = db.createObjectStore('votes', { keyPath: 'key' })
-      votes.createIndex('bySpace', 'spaceId')
-      db.createObjectStore('outbox', { keyPath: 'id', autoIncrement: true })
-      db.createObjectStore('names', { keyPath: 'name' })
+  _db = await openDB('names-roulette', 2, {
+    upgrade(db, oldVersion, _newVersion, tx) {
+      if (oldVersion < 1) {
+        db.createObjectStore('spaces', { keyPath: 'id' })
+        const votes = db.createObjectStore('votes', { keyPath: 'key' })
+        votes.createIndex('bySpace', 'spaceId')
+        db.createObjectStore('outbox', { keyPath: 'id', autoIncrement: true })
+        db.createObjectStore('names', { keyPath: 'name' })
+      }
+      if (oldVersion < 2) {
+        // Force re-fetch of names to pick up the new `popularity` field
+        tx.objectStore('names').clear()
+      }
     }
   })
   return _db
@@ -776,7 +769,7 @@ function participatingSpaceCardHtml(s, uid) {
 
 async function renderHome(fromSync = false) {
   L('home', 'render tab=' + state.homeTab + ' fromSync=' + fromSync)
-  const allSpaces = await dbGetMySpaces(state.user.uid)
+  const allSpaces = (await dbGetMySpaces(state.user.uid)).filter(s => !s.deleted)
   const uid = state.user.uid
   const mySpaces = allSpaces.filter(s => s.creatorUid === uid)
   // "Участвую" = ALL spaces user participates in (created + joined)
@@ -952,7 +945,6 @@ async function renderVoting(spaceId) {
   state.votes = votesMap
   state.history = ordered.map(r => ({ name: r.name, isVote: true, score: r.score }))
 
-  state.skips = new Set()
   state.queue = shuffle(state.names.map(n => n.name))
   renderVotingCard(spaceId)
 }
@@ -966,7 +958,7 @@ function buildCardWrap(nameData, extraCls) {
         <div class="card-overlay"></div>
         <div class="card-top-btns">
           <button class="card-top-btn card-back-btn" ${state.history.length ? '' : 'disabled'}>← Назад</button>
-          <button class="card-top-btn card-skip-btn">${state.pendingReview?.name === nameData.name ? 'Вперёд →' : 'Пропустить'}</button>
+          ${state.pendingReview?.name === nameData.name ? '<button class="card-top-btn card-skip-btn">Вперёд →</button>' : ''}
         </div>
 
         <div class="card-content">
@@ -1024,14 +1016,10 @@ function renderVotingCard(spaceId) {
 
 function setupVotingHandlers(spaceId) {
   document.querySelectorAll('.r-btn').forEach(btn => {
-    btn.onclick = () => advanceCard(spaceId, true, +btn.dataset.score)
+    btn.onclick = () => advanceCard(spaceId, +btn.dataset.score)
   })
   const skipBtn = document.querySelector('.card-current .card-skip-btn')
-  if (skipBtn) {
-    skipBtn.onclick = state.pendingReview
-      ? () => advanceKeep(spaceId)
-      : () => advanceCard(spaceId, false, null)
-  }
+  if (skipBtn) skipBtn.onclick = () => advanceKeep(spaceId)
   const backBtn = document.querySelector('.card-current .card-back-btn')
   if (backBtn) {
     backBtn.disabled = !state.history.length
@@ -1039,11 +1027,9 @@ function setupVotingHandlers(spaceId) {
   }
 }
 
-async function advanceCard(spaceId, isVote, score) {
+async function advanceCard(spaceId, score) {
   // Lock UI to prevent double-fire
   document.querySelectorAll('.r-btn').forEach(b => { b.onclick = null; b.style.pointerEvents = 'none' })
-  const skipBtn = document.querySelector('.card-current .card-skip-btn')
-  if (skipBtn) { skipBtn.onclick = null; skipBtn.disabled = true }
   const backBtn = document.querySelector('.card-current .card-back-btn')
   if (backBtn) backBtn.onclick = null
 
@@ -1051,17 +1037,12 @@ async function advanceCard(spaceId, isVote, score) {
   const queue = getVotingQueue()
   const current = queue[0]
   if (!current) return
-  state.history.push({ name: current.name, isVote, score })
-  const dir = isVote ? (score <= 2 ? 'left' : 'right') : 'up'
+  state.history.push({ name: current.name, isVote: true, score })
+  const dir = score <= 2 ? 'left' : 'right'
   const deck = document.getElementById('card-deck')
 
   await flyAndAdvance(dir, deck)
-
-  if (isVote) {
-    await doVote(spaceId, current.name, score)
-  } else {
-    state.skips.add(current.name)
-  }
+  await doVote(spaceId, current.name, score)
 
   const newQueue = getVotingQueue()
   if (!newQueue.length) { renderDone(spaceId, state.names.length); return }
@@ -1094,21 +1075,15 @@ function goBack(spaceId) {
     state.pendingReview = null
   }
   const last = state.history.pop()
-  if (last.isVote) {
-    // Keep vote in IDB — only remove from memory so card shows in queue
-    state.pendingReview = { name: last.name, originalScore: last.score }
-    delete state.votes[last.name]
-  } else {
-    state.skips.delete(last.name)
-  }
+  // Keep vote in IDB — only remove from memory so card shows in queue with highlight
+  state.pendingReview = { name: last.name, originalScore: last.score }
+  delete state.votes[last.name]
   state.queue = [last.name, ...state.queue.filter(n => n !== last.name)]
   renderVotingCard(spaceId)
 }
 
 async function advanceKeep(spaceId) {
   document.querySelectorAll('.r-btn').forEach(b => { b.onclick = null; b.style.pointerEvents = 'none' })
-  const skipBtn = document.querySelector('.card-current .card-skip-btn')
-  if (skipBtn) { skipBtn.onclick = null; skipBtn.disabled = true }
   const backBtn = document.querySelector('.card-current .card-back-btn')
   if (backBtn) backBtn.onclick = null
 
@@ -1188,9 +1163,7 @@ function getVotingQueue() {
   if (!state.queue.length) state.queue = shuffle(state.names.map(n => n.name))
   const voted = new Set(Object.keys(state.votes))
   const byName = Object.fromEntries(state.names.map(n => [n.name, n]))
-  const normal = state.queue.filter(n => !voted.has(n) && !state.skips.has(n))
-  const skipped = state.queue.filter(n => !voted.has(n) && state.skips.has(n))
-  return [...normal, ...skipped].map(n => byName[n]).filter(Boolean)
+  return state.queue.filter(n => !voted.has(n)).map(n => byName[n]).filter(Boolean)
 }
 
 async function doVote(spaceId, name, score) {
@@ -1313,6 +1286,7 @@ async function renderAdmin(spaceId) {
         ${!isClosed
           ? `<button class="btn btn-danger btn-full" id="btn-close">Завершить голосование</button>`
           : `<button class="btn btn-success btn-full" id="btn-reopen">Переоткрыть голосование</button>`}
+        <button class="btn btn-ghost btn-full" id="btn-delete" style="margin-top:8px;color:var(--danger,#e53935)">Удалить голосование</button>
       </div>
     </div>`)
 
@@ -1384,6 +1358,11 @@ async function renderAdmin(spaceId) {
     await dbSaveSpace(space)
     renderAdmin(spaceId)
   })
+
+  document.getElementById('btn-delete')?.addEventListener('click', async () => {
+    if (!confirm(`Удалить голосование «${space.title}»?\nЭто действие нельзя отменить.`)) return
+    await deleteSpace(spaceId)
+  })
 }
 
 async function updateSpace(spaceId, data) {
@@ -1391,6 +1370,15 @@ async function updateSpace(spaceId, data) {
   if (space) { Object.assign(space, data); await dbSaveSpace(space) }
   await dbAddOutbox({ type: 'SPACE_UPDATE', spaceId, data })
   drainOutbox()
+}
+
+async function deleteSpace(spaceId) {
+  // Mark deleted in Firestore (creator can update), then remove locally
+  await dbAddOutbox({ type: 'SPACE_UPDATE', spaceId, data: { deleted: true, status: 'deleted' } })
+  drainOutbox()
+  const db = await getDB()
+  await db.delete('spaces', spaceId)
+  navigate('/')
 }
 
 // ─── VIEW: RESULTS ────────────────────────────────────────────────────────────
@@ -1489,9 +1477,8 @@ function renderAggregateItems(allVotes, penalty) {
       name, d,
       avg: d.sum / d.total,
       meta: state.names.find(n => n.name === name) || { name },
-      pop: NAME_POPULARITY[name] || 0.1,
     }))
-    .map(x => ({ ...x, score: x.avg - penalty * x.pop * RATINGS.length }))
+    .map(x => ({ ...x, score: x.avg - penalty * (x.meta?.popularity ?? 0.1) * RATINGS.length }))
     .filter(x => x.avg >= 3)
     .sort((a, b) => b.score - a.score)
 
@@ -1500,7 +1487,7 @@ function renderAggregateItems(allVotes, penalty) {
     return
   }
 
-  document.getElementById('res-list').innerHTML = ranked.slice(0, 50).map((x, i) => {
+  document.getElementById('res-list').innerHTML = ranked.map((x, i) => {
     const rank = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1)
     const segs = RATINGS.map(r => {
       const pct = (x.d[r.score] / x.d.total * 100).toFixed(1)
