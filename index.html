@@ -520,16 +520,22 @@ async function syncSpacesFromFirestore(uid) {
   L('sync#fetch', 'start uid=' + safeUid(uid))
   let hadNew = false
 
-  // Step 1: spaces created by this user
+  // Step 1: spaces created by this user — always overwrite to pick up status changes (deleted, closed)
   try {
     const q = query(collection(fbDb, 'spaces'), where('creatorUid', '==', uid))
     const createdSnap = await getDocs(q)
     L('sync#fetch', 'creatorUid query returned=' + createdSnap.size)
     for (const d of createdSnap.docs) {
-      if (!(await dbGetSpace(d.id))) {
-        const data = d.data()
-        await dbSaveSpace({ id: d.id, ...data, createdAt: data.createdAt?.toMillis?.() || Date.now(), joinedUids: data.joinedUids || [uid] })
+      const existing = await dbGetSpace(d.id)
+      const data = d.data()
+      const updated = { id: d.id, ...data, createdAt: data.createdAt?.toMillis?.() || Date.now(), joinedUids: data.joinedUids || [uid] }
+      if (!existing) {
+        await dbSaveSpace(updated)
         L('sync#fetch', 'saved created space id=' + d.id.slice(0, 8))
+        hadNew = true
+      } else if (data.deleted !== existing.deleted || data.status !== existing.status) {
+        await dbSaveSpace({ ...existing, ...updated })
+        L('sync#fetch', 'updated space status id=' + d.id.slice(0, 8) + ' deleted=' + !!data.deleted)
         hadNew = true
       }
     }
@@ -540,7 +546,8 @@ async function syncSpacesFromFirestore(uid) {
     const linksSnap = await getDocs(collection(fbDb, 'users', uid, 'spaces'))
     L('sync#fetch', 'user space links count=' + linksSnap.size)
     for (const linkDoc of linksSnap.docs) {
-      if (!(await dbGetSpace(linkDoc.id))) {
+      const existing = await dbGetSpace(linkDoc.id)
+      if (!existing) {
         const spaceSnap = await getDoc(doc(fbDb, 'spaces', linkDoc.id))
         if (spaceSnap.exists()) {
           const data = spaceSnap.data()
@@ -553,6 +560,23 @@ async function syncSpacesFromFirestore(uid) {
       }
     }
   } catch (e) { L('sync#fetch', 'step2 error', e.message) }
+
+  // Step 2b: check already-cached joined spaces for deletion by their creator
+  try {
+    const allSpaces = await dbGetMySpaces(uid)
+    const joinedActive = allSpaces.filter(s => s.creatorUid !== uid && !s.deleted)
+    for (const space of joinedActive) {
+      try {
+        const snap = await getDoc(doc(fbDb, 'spaces', space.id))
+        const isDeleted = !snap.exists() || snap.data().deleted
+        if (isDeleted) {
+          await dbSaveSpace({ ...space, deleted: true, status: 'deleted' })
+          L('sync#fetch', 'joined space deleted id=' + space.id.slice(0, 8))
+          hadNew = true
+        }
+      } catch (_) {}
+    }
+  } catch (e) { L('sync#fetch', 'step2b error', e.message) }
 
   // Step 3: sync vote progress for all known spaces (active sync of _progress)
   try {
