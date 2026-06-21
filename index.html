@@ -255,7 +255,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js'
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut as fbSignOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js'
-import { getFirestore, doc, setDoc, getDoc, getDocs, updateDoc, collection, onSnapshot, serverTimestamp, query, where } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js'
+import { getFirestore, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, collection, onSnapshot, serverTimestamp, query, where } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js'
 import { openDB } from 'https://cdn.jsdelivr.net/npm/idb@7/+esm'
 
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
@@ -883,6 +883,24 @@ function renderNewSpace() {
 }
 
 // ─── VIEW: VOTING ─────────────────────────────────────────────────────────────
+function renderNotFound(isDeleted = false) {
+  mount(`
+    ${navHtml('', '/')}
+    <div class="inner-view view" style="display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:48px 24px">
+      <div style="font-size:56px;margin-bottom:16px">${isDeleted ? '🗑' : '🔍'}</div>
+      <div style="font-size:18px;font-weight:600;margin-bottom:8px">
+        ${isDeleted ? 'Голосование удалено' : 'Голосование не найдено'}
+      </div>
+      <div style="font-size:14px;color:var(--t2);margin-bottom:28px;max-width:280px">
+        ${isDeleted
+          ? 'Организатор удалил это голосование и все его данные'
+          : 'Ссылка устарела или голосование не существует'}
+      </div>
+      <button class="btn btn-primary" data-nav="/">На главную</button>
+    </div>`)
+  bindNav()
+}
+
 async function renderVoting(spaceId) {
   L('voting', 'enter spaceId=' + spaceId.slice(0, 8))
   // Load or fetch space
@@ -892,7 +910,9 @@ async function renderVoting(spaceId) {
     try {
       const snap = await getDoc(doc(fbDb, 'spaces', spaceId))
       if (snap.exists()) {
-        space = { id: snap.id, ...snap.data(), createdAt: snap.data().createdAt?.toMillis?.() || Date.now() }
+        const data = snap.data()
+        if (data.deleted) { renderNotFound(true); return }
+        space = { id: snap.id, ...data, createdAt: data.createdAt?.toMillis?.() || Date.now() }
         // Mark as joined
         if (!space.joinedUids) space.joinedUids = []
         if (!space.joinedUids.includes(state.user.uid)) space.joinedUids.push(state.user.uid)
@@ -907,7 +927,8 @@ async function renderVoting(spaceId) {
       }
     } catch (_) {}
   }
-  if (!space) { toast('Голосование не найдено', 'error'); navigate('/'); return }
+  if (!space) { renderNotFound(false); return }
+  if (space.deleted) { renderNotFound(true); return }
 
   state.space = space
 
@@ -1200,6 +1221,8 @@ function renderDone(spaceId, total) {
 async function renderHistory(spaceId) {
   if (!state.space || state.space.id !== spaceId) {
     state.space = await dbGetSpace(spaceId)
+    if (!state.space) { renderNotFound(false); return }
+    if (state.space.deleted) { renderNotFound(true); return }
     state.votes = await dbGetVotes(spaceId)
   }
 
@@ -1257,7 +1280,9 @@ async function renderAdmin(spaceId) {
       }
     } catch (_) {}
   }
-  if (!space || space.creatorUid !== state.user.uid) {
+  if (!space) { renderNotFound(false); return }
+  if (space.deleted) { renderNotFound(true); return }
+  if (space.creatorUid !== state.user.uid) {
     toast('Нет доступа', 'error'); navigate('/'); return
   }
   state.space = space
@@ -1373,11 +1398,34 @@ async function updateSpace(spaceId, data) {
 }
 
 async function deleteSpace(spaceId) {
-  // Mark deleted in Firestore (creator can update), then remove locally
-  await dbAddOutbox({ type: 'SPACE_UPDATE', spaceId, data: { deleted: true, status: 'deleted' } })
-  drainOutbox()
+  // Soft-delete marker — propagates to all devices via Firestore (creator can update)
+  try {
+    await updateDoc(doc(fbDb, 'spaces', spaceId), { deleted: true, status: 'deleted' })
+  } catch (e) {
+    L('deleteSpace', 'Firestore update failed', e.message)
+  }
+
+  // Delete own votes + members entries from Firestore subcollections
+  const uid = state.user?.uid
+  if (uid) {
+    await deleteDoc(doc(fbDb, 'spaces', spaceId, 'votes', uid)).catch(() => {})
+    await deleteDoc(doc(fbDb, 'spaces', spaceId, 'members', uid)).catch(() => {})
+    await deleteDoc(doc(fbDb, 'users', uid, 'spaces', spaceId)).catch(() => {})
+  }
+
+  // Try full document deletion (requires Firebase rule: allow delete if creator)
+  // Fails silently until rules are updated in Firebase console:
+  //   allow delete: if request.auth.uid == resource.data.creatorUid;
+  await deleteDoc(doc(fbDb, 'spaces', spaceId)).catch(() => {})
+
+  // Delete from IDB: space record + all votes for this space
   const db = await getDB()
   await db.delete('spaces', spaceId)
+  const tx = db.transaction('votes', 'readwrite')
+  const keys = await tx.store.index('bySpace').getAllKeys(spaceId)
+  await Promise.all(keys.map(k => tx.store.delete(k)))
+  await tx.done
+
   navigate('/')
 }
 
@@ -1387,10 +1435,16 @@ async function renderResults(spaceId) {
   if (!space) {
     try {
       const snap = await getDoc(doc(fbDb, 'spaces', spaceId))
-      if (snap.exists()) { space = { id: snap.id, ...snap.data() }; await dbSaveSpace(space) }
+      if (snap.exists()) {
+        const data = snap.data()
+        if (data.deleted) { renderNotFound(true); return }
+        space = { id: snap.id, ...data }
+        await dbSaveSpace(space)
+      }
     } catch (_) {}
   }
-  if (!space) { toast('Голосование не найдено', 'error'); navigate('/'); return }
+  if (!space) { renderNotFound(false); return }
+  if (space.deleted) { renderNotFound(true); return }
   if (space.status !== 'closed') { toast('Результаты будут доступны после завершения', 'error'); navigate('/space/' + spaceId); return }
   state.space = space
 
