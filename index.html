@@ -117,6 +117,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 .history-link{font-size:12px;color:var(--accent);text-decoration:none;white-space:nowrap;flex-shrink:0}
 
 .name-card{flex:1;border-radius:24px;padding:28px 24px 24px;display:flex;flex-direction:column;justify-content:flex-end;position:relative;overflow:hidden;min-height:0;color:white}
+.card-image{position:absolute;inset:0;background-size:cover;background-position:top center;-webkit-mask-image:linear-gradient(to bottom,black 40%,transparent 85%);mask-image:linear-gradient(to bottom,black 40%,transparent 85%);opacity:.72;filter:brightness(.85) saturate(.8)}
 .card-overlay{position:absolute;inset:0;background:linear-gradient(to bottom,transparent 30%,rgba(0,0,0,.5) 100%)}
 .card-content{position:relative;z-index:1}
 .card-name{font-size:clamp(36px,8vw,56px);font-weight:900;line-height:1.05;margin-bottom:8px;text-shadow:0 2px 12px rgba(0,0,0,.25)}
@@ -917,6 +918,7 @@ function buildCardWrap(nameData, extraCls) {
   const [c1, c2] = CARD_BG[idx % CARD_BG.length]
   return `<div class="card-wrap${extraCls ? ' ' + extraCls : ''}">
       <div class="name-card" style="background:linear-gradient(145deg,${c1},${c2})">
+        <div class="card-image" style="background-image:url('data/images/${encodeURIComponent(nameData.name)}.jpg')"></div>
         <div class="card-overlay"></div>
         <button class="card-skip" data-action="skip">Пропустить</button>
         <div class="card-idx">#${idx + 1}</div>

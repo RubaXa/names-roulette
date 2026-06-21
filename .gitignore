@@ -2,3 +2,9 @@ data/checkpoints/
 fetch_names.py
 node_modules/
 .DS_Store
+.npmrc
+.claude/
+test-images/
+test_fal.py
+test_fal.mjs
+test_models.py
