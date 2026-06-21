@@ -13,8 +13,8 @@
   --accent:#7c6ff7;--accent2:#f76f9a;
   --danger:#f76f6f;--success:#6fd8a0;
 }
-html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;font-size:15px;-webkit-tap-highlight-color:transparent;overscroll-behavior:none}
-#app{min-height:100vh;display:flex;flex-direction:column}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;font-size:15px;-webkit-tap-highlight-color:transparent;overscroll-behavior:none}
+#app{height:100%;display:flex;flex-direction:column}
 
 /* NAV */
 .nav{background:rgba(15,15,19,.92);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:0 16px;height:56px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-shrink:0;position:sticky;top:0;z-index:100}
@@ -59,7 +59,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 @keyframes toastIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 
 /* VIEW */
-.view{flex:1;animation:vin .18s ease}
+.view{flex:1;min-height:0;overflow-y:auto;animation:vin .18s ease}
 @keyframes vin{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
 
 /* LOGIN */
@@ -109,7 +109,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 .gender-note{font-size:11px;color:var(--t3);margin-bottom:20px}
 
 /* VOTING */
-.voting-view{display:flex;flex-direction:column;max-width:480px;margin:0 auto;width:100%;padding:14px 16px calc(20px + env(safe-area-inset-bottom,0px));height:calc(100dvh - 56px);min-height:0;box-sizing:border-box}
+.voting-view{display:flex;flex-direction:column;max-width:480px;margin:0 auto;width:100%;padding:14px 16px calc(20px + env(safe-area-inset-bottom,0px));height:100%;min-height:0;box-sizing:border-box;overflow:hidden}
 .voting-top{display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-shrink:0}
 .progress-bar{flex:1;height:4px;background:var(--surface2);border-radius:2px;overflow:hidden}
 .progress-fill{height:100%;border-radius:2px;background:linear-gradient(to right,var(--accent),var(--accent2));transition:width .3s ease}
