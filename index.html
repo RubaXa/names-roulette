@@ -96,6 +96,8 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 .space-chevron{color:var(--t3);font-size:20px;line-height:1}
 .debug-btn{background:none;border:none;cursor:pointer;font-size:17px;padding:4px 6px;border-radius:8px;transition:opacity .15s;opacity:.5;line-height:1}
 .debug-btn:hover{opacity:1}
+@keyframes debug-alert{0%,100%{filter:none;opacity:1}50%{filter:drop-shadow(0 0 7px #ff4444);opacity:1}}
+.debug-btn.has-error{opacity:1!important;animation:debug-alert .75s ease-in-out infinite}
 .empty-state{text-align:center;padding:48px 20px;color:var(--t2)}
 .empty-icon{font-size:44px;margin-bottom:12px}
 .empty-text{font-size:14px;line-height:1.7}
@@ -148,10 +150,16 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
   35% {transform:translateY(-18%) rotate(-8deg);opacity:1}
   100%{transform:translateY(-115%) rotate(-18deg);opacity:0}
 }
+@keyframes fly-zoom{
+  0%  {transform:scale(1);opacity:1}
+  22% {transform:scale(1.08);opacity:1}
+  100%{transform:scale(0.06);opacity:0}
+}
 .name-card{animation:card-in .22s ease-out;transform-origin:50% 30%}
 .name-card.fly-left{animation:fly-left .28s cubic-bezier(.4,0,1,1) forwards!important}
 .name-card.fly-right{animation:fly-right .28s cubic-bezier(.4,0,1,1) forwards!important}
 .name-card.fly-up{animation:fly-skip .28s cubic-bezier(.4,0,1,1) forwards!important}
+.name-card.fly-zoom{animation:fly-zoom .34s cubic-bezier(.55,0,1,1) forwards!important;transform-origin:50% 50%!important}
 .home-tabs{display:flex;background:var(--surface2);border-radius:12px;padding:3px;margin-bottom:20px}
 .home-tab{flex:1;padding:9px 4px;border-radius:9px;border:none;background:transparent;color:var(--t2);font-size:13px;font-weight:600;cursor:pointer;transition:all .15s}
 .home-tab.active{background:var(--surface);color:var(--text);box-shadow:0 1px 4px rgba(0,0,0,.2)}
@@ -319,6 +327,14 @@ function L(anchor, ...args) {
   if (LOG_BUFFER.length > 500) LOG_BUFFER.shift()
   console.debug(`%c${line}`, 'color:#64b5f6;font-size:11px')
 }
+
+// ─── GLOBAL ERROR HANDLER ─────────────────────────────────────────────────────
+function _onJsError(msg, src, line) {
+  L('ERROR', msg + (src ? ' @ ' + src.split('/').pop() + ':' + line : ''))
+  document.querySelectorAll('.debug-btn').forEach(b => b.classList.add('has-error'))
+}
+window.addEventListener('error', e => _onJsError(e.message, e.filename, e.lineno))
+window.addEventListener('unhandledrejection', e => _onJsError('Unhandled: ' + (e.reason?.message || e.reason), '', ''))
 
 // ─── FIREBASE ─────────────────────────────────────────────────────────────────
 const fbApp = initializeApp(FB_CONFIG)
@@ -725,6 +741,7 @@ function bindNav() {
     if (confirm(`Выйти из аккаунта?\n${state.user?.displayName || state.user?.email}`)) signOut()
   })
   document.getElementById('btn-debug')?.addEventListener('click', async () => {
+    document.querySelectorAll('.debug-btn').forEach(b => b.classList.remove('has-error'))
     const text = LOG_BUFFER.join('\n')
     L('debug', 'copy logs count=' + LOG_BUFFER.length)
     try {
@@ -1084,7 +1101,7 @@ async function advanceCard(spaceId, score) {
   const current = queue[0]
   if (!current) return
   state.history.push({ name: current.name, isVote: true, score })
-  const dir = score <= 2 ? 'left' : score === 3 ? 'up' : 'right'
+  const dir = score <= 2 ? 'left' : score <= 4 ? 'zoom' : 'right'
   const deck = document.getElementById('card-deck')
 
   await flyAndAdvance(dir, deck)
@@ -1169,7 +1186,7 @@ function flyAndAdvance(dir, deck) {
     if (!currentCard) { resolve(); return }
 
     // Start fly on current card
-    currentCard.classList.remove('fly-left', 'fly-right', 'fly-up')
+    currentCard.classList.remove('fly-left', 'fly-right', 'fly-up', 'fly-zoom')
     void currentCard.offsetWidth
     currentCard.classList.add('fly-' + dir)
 
