@@ -90,6 +90,8 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 .status-active{background:rgba(111,216,160,.12);color:var(--success)}
 .status-closed{background:rgba(255,255,255,.05);color:var(--t3)}
 .space-chevron{color:var(--t3);font-size:20px;line-height:1}
+.debug-btn{background:none;border:none;cursor:pointer;font-size:17px;padding:4px 6px;border-radius:8px;transition:opacity .15s;opacity:.5;line-height:1}
+.debug-btn:hover{opacity:1}
 .empty-state{text-align:center;padding:48px 20px;color:var(--t2)}
 .empty-icon{font-size:44px;margin-bottom:12px}
 .empty-text{font-size:14px;line-height:1.7}
@@ -244,7 +246,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js'
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut as fbSignOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js'
-import { getFirestore, doc, setDoc, getDoc, getDocs, updateDoc, collection, onSnapshot, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js'
+import { getFirestore, doc, setDoc, getDoc, getDocs, updateDoc, collection, onSnapshot, serverTimestamp, query, where } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js'
 import { openDB } from 'https://cdn.jsdelivr.net/npm/idb@7/+esm'
 
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
@@ -288,6 +290,23 @@ const state = {
   homeTab: 'participating', // 'participating' | 'mine'
 }
 
+// ─── LOGGER ──────────────────────────────────────────────────────────────────
+const LOG_BUFFER = []
+const safeUid = uid => uid ? uid.slice(0, 8) + '…' : 'none'
+function L(anchor, ...args) {
+  const now = new Date()
+  const ts = now.toTimeString().slice(0, 8) + '.' + String(now.getMilliseconds()).padStart(3, '0')
+  const msg = args.map(a => {
+    if (a === null || a === undefined) return String(a)
+    if (typeof a !== 'object') return String(a)
+    try { return JSON.stringify(a) } catch (_) { return '[obj]' }
+  }).join(' ')
+  const line = `[${ts}][${anchor}] ${msg}`
+  LOG_BUFFER.push(line)
+  if (LOG_BUFFER.length > 500) LOG_BUFFER.shift()
+  console.debug(`%c${line}`, 'color:#64b5f6;font-size:11px')
+}
+
 // ─── FIREBASE ─────────────────────────────────────────────────────────────────
 const fbApp = initializeApp(FB_CONFIG)
 const fbAuth = getAuth(fbApp)
@@ -311,20 +330,25 @@ async function getDB() {
 }
 
 async function dbSaveSpace(space) {
+  L('db#saveSpace', 'id=' + space.id?.slice(0, 8))
   const db = await getDB()
   await db.put('spaces', space)
 }
 
 async function dbGetSpace(id) {
   const db = await getDB()
-  return db.get('spaces', id)
+  const s = await db.get('spaces', id)
+  L('db#getSpace', 'id=' + id?.slice(0, 8), s ? 'HIT' : 'MISS')
+  return s
 }
 
 async function dbGetMySpaces(uid) {
   const db = await getDB()
   const all = await db.getAll('spaces')
-  return all.filter(s => s.creatorUid === uid || s.joinedUids?.includes(uid))
+  const result = all.filter(s => s.creatorUid === uid || s.joinedUids?.includes(uid))
     .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+  L('db#getMySpaces', 'uid=' + safeUid(uid), 'found=' + result.length)
+  return result
 }
 
 async function dbSaveVote(spaceId, name, score) {
@@ -342,18 +366,20 @@ async function dbGetVotes(spaceId) {
 }
 
 async function dbAddOutbox(entry) {
+  L('db#outbox', 'add type=' + entry.type)
   const db = await getDB()
   await db.add('outbox', { ...entry, createdAt: Date.now(), attempts: 0 })
 }
 
 // ─── NAMES ────────────────────────────────────────────────────────────────────
 async function loadNames() {
+  L('names#load', 'start')
   try {
-    // check IDB cache
     const db = await getDB()
     const cached = await db.getAll('names')
     if (cached.length > 0) {
       state.names = cached
+      L('names#load', 'IDB cache hit count=' + cached.length)
       return
     }
   } catch (_) {}
@@ -366,24 +392,32 @@ async function loadNames() {
       const db = await getDB()
       const tx = db.transaction('names', 'readwrite')
       await Promise.all([...enriched.map(n => tx.store.put(n)), tx.done])
+      L('names#load', 'fetched and cached count=' + enriched.length)
       return
     }
-  } catch (_) {}
+  } catch (e) {
+    L('names#load', 'fetch error', e.message)
+  }
 
-  // Fallback: basic list, enrichment pending
   state.names = ALL_NAMES.map(n => ({ name: n }))
+  L('names#load', 'fallback to ALL_NAMES count=' + state.names.length)
 }
 
 // ─── OUTBOX SYNC ─────────────────────────────────────────────────────────────
 async function drainOutbox() {
-  if (!state.user || state.draining || window._blockSync) return
+  if (!state.user || state.draining || window._blockSync) {
+    L('sync#drain', 'skip user=' + !!state.user + ' draining=' + state.draining + ' blocked=' + !!window._blockSync)
+    return
+  }
   state.draining = true
+  L('sync#drain', 'start uid=' + safeUid(state.user.uid))
   try {
     const db = await getDB()
     const entries = await db.getAll('outbox')
-    if (!entries.length) { setSyncStatus('ok', 0); return }
+    if (!entries.length) { setSyncStatus('ok', 0); L('sync#drain', 'outbox empty'); return }
 
     setSyncStatus('pending', entries.length)
+    L('sync#drain', 'outbox entries=' + entries.length)
 
     const votesBySpace = {}
     const others = []
@@ -405,28 +439,96 @@ async function drainOutbox() {
         await setDoc(doc(fbDb, 'spaces', spaceId, 'votes', state.user.uid),
           { votes: merged, updatedAt: serverTimestamp() }, { merge: true })
         votes.forEach(v => done.push(v.id))
-      } catch (e) { console.warn('VOTE sync failed', e.message) }
+        L('sync#drain', 'VOTE batch ok spaceId=' + spaceId.slice(0, 8) + ' count=' + votes.length)
+      } catch (e) {
+        L('sync#drain', 'VOTE batch error spaceId=' + spaceId.slice(0, 8), e.message)
+      }
     }
 
     for (const entry of others) {
       try {
         if (entry.type === 'SPACE_CREATE') {
           await setDoc(doc(fbDb, 'spaces', entry.spaceId), entry.data)
+          L('sync#drain', 'SPACE_CREATE ok spaceId=' + entry.spaceId.slice(0, 8))
         } else if (entry.type === 'SPACE_UPDATE') {
           await updateDoc(doc(fbDb, 'spaces', entry.spaceId), entry.data)
+          L('sync#drain', 'SPACE_UPDATE ok spaceId=' + entry.spaceId.slice(0, 8))
         } else if (entry.type === 'MEMBER_JOIN') {
           await setDoc(doc(fbDb, 'spaces', entry.spaceId, 'members', state.user.uid), entry.data, { merge: true })
+          L('sync#drain', 'MEMBER_JOIN ok spaceId=' + entry.spaceId.slice(0, 8))
+        } else if (entry.type === 'USER_SPACE_LINK') {
+          await setDoc(doc(fbDb, 'users', state.user.uid, 'spaces', entry.spaceId), { at: serverTimestamp() }, { merge: true })
+          L('sync#drain', 'USER_SPACE_LINK ok spaceId=' + entry.spaceId.slice(0, 8))
+        } else {
+          L('sync#drain', 'UNKNOWN type=' + entry.type)
         }
         done.push(entry.id)
-      } catch (e) { console.warn(entry.type, 'sync failed', e.message) }
+      } catch (e) {
+        L('sync#drain', entry.type + ' error', e.message)
+      }
     }
 
     await Promise.all(done.map(id => db.delete('outbox', id)))
     const remaining = entries.length - done.length
     setSyncStatus(remaining ? 'error' : 'ok', remaining)
+    L('sync#drain', 'done remaining=' + remaining)
   } finally {
     state.draining = false
   }
+}
+
+// NOTE: requires Firestore security rule for users/{uid}/spaces subcollection:
+// match /users/{uid}/{document=**} { allow read, write: if request.auth.uid == uid; }
+let _homeSyncDone = false
+
+async function syncSpacesFromFirestore(uid) {
+  L('sync#fetch', 'start uid=' + safeUid(uid))
+  let hadNew = false
+  try {
+    // 1. Spaces created by this user
+    const q = query(collection(fbDb, 'spaces'), where('creatorUid', '==', uid))
+    const createdSnap = await getDocs(q)
+    L('sync#fetch', 'creatorUid query returned=' + createdSnap.size)
+    for (const d of createdSnap.docs) {
+      const existing = await dbGetSpace(d.id)
+      if (!existing) {
+        const data = d.data()
+        await dbSaveSpace({
+          id: d.id, ...data,
+          createdAt: data.createdAt?.toMillis?.() || Date.now(),
+          joinedUids: data.joinedUids || [uid]
+        })
+        L('sync#fetch', 'saved created space id=' + d.id.slice(0, 8))
+        hadNew = true
+      }
+    }
+
+    // 2. Spaces in user's tracked list (joined from link on another device)
+    const linksSnap = await getDocs(collection(fbDb, 'users', uid, 'spaces'))
+    L('sync#fetch', 'user space links count=' + linksSnap.size)
+    for (const linkDoc of linksSnap.docs) {
+      const existing = await dbGetSpace(linkDoc.id)
+      if (!existing) {
+        const spaceSnap = await getDoc(doc(fbDb, 'spaces', linkDoc.id))
+        if (spaceSnap.exists()) {
+          const data = spaceSnap.data()
+          const space = {
+            id: spaceSnap.id, ...data,
+            createdAt: data.createdAt?.toMillis?.() || Date.now(),
+            joinedUids: data.joinedUids || []
+          }
+          if (!space.joinedUids.includes(uid)) space.joinedUids.push(uid)
+          await dbSaveSpace(space)
+          L('sync#fetch', 'saved joined space id=' + linkDoc.id.slice(0, 8))
+          hadNew = true
+        }
+      }
+    }
+  } catch (e) {
+    L('sync#fetch', 'ERROR', e.message)
+  }
+  L('sync#fetch', 'done hadNew=' + hadNew)
+  return hadNew
 }
 
 function setSyncStatus(status, count) {
@@ -443,20 +545,25 @@ function setSyncStatus(status, count) {
 
 // ─── AUTH ─────────────────────────────────────────────────────────────────────
 async function signIn() {
+  L('auth', 'signIn attempt')
   try {
     await signInWithPopup(fbAuth, gProvider)
+    L('auth', 'signIn success')
   } catch (e) {
+    L('auth', 'signIn error', e.code, e.message)
     if (e.code !== 'auth/popup-closed-by-user') toast('Ошибка входа: ' + e.message, 'error')
   }
 }
 
 async function signOut() {
+  L('auth', 'signOut')
   await fbSignOut(fbAuth)
   navigate('/')
 }
 
 // ─── ROUTER ───────────────────────────────────────────────────────────────────
 function navigate(path) {
+  L('router', 'navigate', path)
   location.hash = path
 }
 
@@ -479,9 +586,11 @@ function getRoute() {
 async function route() {
   if (state.unsubWatcher) { state.unsubWatcher(); state.unsubWatcher = null }
   const r = getRoute()
+  L('router', 'route name=' + r.name + (r.id ? ' id=' + r.id.slice(0, 8) : ''))
 
   if (!state.user) {
     if (r.name !== 'home') sessionStorage.setItem('pendingRoute', location.hash)
+    L('router', 'no user → renderLogin')
     renderLogin()
     return
   }
@@ -492,7 +601,7 @@ async function route() {
   else if (r.name === 'history') await renderHistory(r.id)
   else if (r.name === 'admin') await renderAdmin(r.id)
   else if (r.name === 'results') await renderResults(r.id)
-  else renderHome()
+  else { L('router', 'unknown route, fallback home'); renderHome() }
 }
 
 // ─── MOUNT + TOAST ────────────────────────────────────────────────────────────
@@ -531,6 +640,7 @@ function navHtml(title, backPath, showSync = true) {
         <span class="nav-title">${title}</span>
       </div>
       <div class="nav-right">
+        <button class="debug-btn" id="btn-debug" title="Копировать логи">🐞</button>
         ${showSync ? '<div class="sync-dot" title="Синхронизировано"></div>' : ''}
         <div class="nav-avatar" data-action="user-menu" title="${state.user?.displayName || ''}">${avatar}</div>
       </div>
@@ -543,6 +653,16 @@ function bindNav() {
   })
   document.querySelector('[data-action="user-menu"]')?.addEventListener('click', () => {
     if (confirm(`Выйти из аккаунта?\n${state.user?.displayName || state.user?.email}`)) signOut()
+  })
+  document.getElementById('btn-debug')?.addEventListener('click', async () => {
+    const text = LOG_BUFFER.join('\n')
+    L('debug', 'copy logs count=' + LOG_BUFFER.length)
+    try {
+      await navigator.clipboard.writeText(text)
+      toast(`Логи скопированы (${LOG_BUFFER.length})`, 'ok')
+    } catch (_) {
+      toast('Clipboard недоступен', 'error')
+    }
   })
 }
 
@@ -565,7 +685,27 @@ function renderLogin() {
 }
 
 // ─── VIEW: HOME ───────────────────────────────────────────────────────────────
-function spaceCardHtml(s, uid) {
+function adminSpaceCardHtml(s) {
+  const memberCount = s._memberCount !== undefined ? s._memberCount : '?'
+  const progPct = s._avgProgress !== undefined ? Math.round(s._avgProgress) + '%' : null
+  return `
+    <div class="space-card" data-nav="/space/${s.id}/admin">
+      <div>
+        <div class="space-card-name">${esc(s.title)}</div>
+        <div class="space-card-meta">
+          <span class="status-pill ${s.status === 'active' ? 'status-active' : 'status-closed'}">
+            ${s.status === 'active' ? '● Открыт' : '○ Закрыт'}
+          </span>
+          <span>👥 ${memberCount}</span>
+          ${progPct ? `<span>📊 ${progPct}</span>` : ''}
+        </div>
+      </div>
+      <span class="space-chevron">›</span>
+    </div>`
+}
+
+function participatingSpaceCardHtml(s, uid) {
+  const isCreator = s.creatorUid === uid
   return `
     <div class="space-card" data-nav="/space/${s.id}">
       <div>
@@ -574,7 +714,7 @@ function spaceCardHtml(s, uid) {
           <span class="status-pill ${s.status === 'active' ? 'status-active' : 'status-closed'}">
             ${s.status === 'active' ? '● Открыт' : '○ Закрыт'}
           </span>
-          ${s.creatorUid === uid ? '<span>Создатель</span>' : '<span>Участник</span>'}
+          ${isCreator ? '<span>👑 Автор</span>' : ''}
           ${s._progress ? `<span>${s._progress} оценено</span>` : ''}
         </div>
       </div>
@@ -582,29 +722,32 @@ function spaceCardHtml(s, uid) {
     </div>`
 }
 
-async function renderHome() {
+async function renderHome(fromSync = false) {
+  L('home', 'render tab=' + state.homeTab + ' fromSync=' + fromSync)
   const allSpaces = await dbGetMySpaces(state.user.uid)
   const uid = state.user.uid
   const mySpaces = allSpaces.filter(s => s.creatorUid === uid)
-  const joinedSpaces = allSpaces.filter(s => s.creatorUid !== uid)
+  // "Участвую" = ALL spaces user participates in (created + joined)
+  const participatingSpaces = allSpaces
   const avatar = state.user?.photoURL
     ? `<img src="${state.user.photoURL}" alt="">`
     : initials(state.user?.displayName)
 
   const tab = state.homeTab
-  const shown = tab === 'mine' ? mySpaces : joinedSpaces
+  const shown = tab === 'mine' ? mySpaces : participatingSpaces
   const emptyText = tab === 'mine'
     ? 'Вы ещё не создавали сессий.<br>Нажмите «Создать Space» выше.'
-    : 'Вас ещё не пригласили.<br>Попросите партнёра прислать ссылку.'
+    : 'Нет активных сессий.<br>Создайте Space или попросите партнёра прислать ссылку.'
 
   const spaceCards = shown.length
-    ? shown.map(s => spaceCardHtml(s, uid)).join('')
+    ? shown.map(s => tab === 'mine' ? adminSpaceCardHtml(s) : participatingSpaceCardHtml(s, uid)).join('')
     : `<div class="empty-state"><div class="empty-icon">🎴</div><p class="empty-text">${emptyText}</p></div>`
 
   mount(`
     <nav class="nav">
       <div class="nav-left"><span class="nav-title">✨ Имена · Рулетка</span></div>
       <div class="nav-right">
+        <button class="debug-btn" id="btn-debug" title="Копировать логи">🐞</button>
         <div class="sync-dot"></div>
         <div class="nav-avatar" data-action="user-menu" title="${esc(state.user?.displayName || '')}">${avatar}</div>
       </div>
@@ -619,7 +762,7 @@ async function renderHome() {
       </button>
       <div class="home-tabs">
         <button class="home-tab ${tab === 'participating' ? 'active' : ''}" data-tab="participating">
-          Участвую${joinedSpaces.length ? ` (${joinedSpaces.length})` : ''}
+          Участвую${participatingSpaces.length ? ` (${participatingSpaces.length})` : ''}
         </button>
         <button class="home-tab ${tab === 'mine' ? 'active' : ''}" data-tab="mine">
           Мои Space${mySpaces.length ? ` (${mySpaces.length})` : ''}
@@ -631,12 +774,24 @@ async function renderHome() {
 
   bindNav()
   setSyncStatus(state.syncStatus, state.pendingCount)
+
   document.querySelectorAll('.home-tab').forEach(btn => {
     btn.addEventListener('click', () => {
       state.homeTab = btn.dataset.tab
       renderHome()
     })
   })
+
+  // Firestore sync on first home load per session
+  if (!fromSync && !_homeSyncDone) {
+    _homeSyncDone = true
+    syncSpacesFromFirestore(uid).then(hadNew => {
+      if (hadNew) {
+        L('home', 'sync brought new spaces, re-rendering')
+        renderHome(true)
+      }
+    })
+  }
 }
 
 // ─── VIEW: NEW SPACE ──────────────────────────────────────────────────────────
@@ -672,8 +827,10 @@ function renderNewSpace() {
       creatorName: state.user.displayName || '',
       createdAt: Date.now(),
     }
+    L('newSpace', 'creating id=' + id.slice(0, 8) + ' title=' + title.slice(0, 20))
     await dbSaveSpace(spaceData)
     await dbAddOutbox({ type: 'SPACE_CREATE', spaceId: id, data: { ...spaceData, createdAt: serverTimestamp() } })
+    await dbAddOutbox({ type: 'USER_SPACE_LINK', spaceId: id })
     drainOutbox()
     navigate('/space/' + id)
   })
@@ -681,6 +838,7 @@ function renderNewSpace() {
 
 // ─── VIEW: VOTING ─────────────────────────────────────────────────────────────
 async function renderVoting(spaceId) {
+  L('voting', 'enter spaceId=' + spaceId.slice(0, 8))
   // Load or fetch space
   let space = await dbGetSpace(spaceId)
   if (!space) {
@@ -693,10 +851,12 @@ async function renderVoting(spaceId) {
         if (!space.joinedUids) space.joinedUids = []
         if (!space.joinedUids.includes(state.user.uid)) space.joinedUids.push(state.user.uid)
         await dbSaveSpace(space)
+        L('voting', 'joining space id=' + spaceId.slice(0, 8))
         await dbAddOutbox({
           type: 'MEMBER_JOIN', spaceId,
           data: { displayName: state.user.displayName, photoURL: state.user.photoURL, joinedAt: serverTimestamp(), progress: 0 }
         })
+        await dbAddOutbox({ type: 'USER_SPACE_LINK', spaceId })
         drainOutbox()
       }
     } catch (_) {}
@@ -974,6 +1134,7 @@ async function renderHistory(spaceId) {
 
 // ─── VIEW: ADMIN ──────────────────────────────────────────────────────────────
 async function renderAdmin(spaceId) {
+  L('admin', 'enter spaceId=' + spaceId.slice(0, 8))
   let space = await dbGetSpace(spaceId)
   if (!space) {
     try {
@@ -1056,6 +1217,14 @@ async function renderAdmin(spaceId) {
     }).join('') || '<p style="color:var(--t2);font-size:14px;padding:8px 0">Пока нет участников. Поделитесь ссылкой!</p>'
 
     document.getElementById('member-list').innerHTML = memberHtml
+
+    // Cache member count and average progress for home card display
+    space._memberCount = members.length
+    let totalProg = 0
+    members.forEach(m => { totalProg += (progressMap[m.uid] || 0) })
+    space._avgProgress = members.length > 0 ? (totalProg / members.length / (state.names.length || 213)) * 100 : 0
+    await dbSaveSpace(space)
+    L('admin', 'cached memberCount=' + space._memberCount + ' avgProg=' + Math.round(space._avgProgress) + '%')
   } catch (e) {
     document.getElementById('member-list').innerHTML = '<p style="color:var(--t2);font-size:13px">Не удалось загрузить участников</p>'
   }
@@ -1224,6 +1393,7 @@ function esc(s) {
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 async function init() {
+  L('init', 'start')
   await loadNames()
 
   // E2E test mode: ?e2e_user=BASE64_JSON — only works on localhost
@@ -1251,6 +1421,7 @@ async function init() {
   }
 
   onAuthStateChanged(fbAuth, async user => {
+    L('auth', 'state change uid=' + safeUid(user?.uid) + ' hasUser=' + !!user)
     state.user = user
     if (user) {
       const pending = sessionStorage.getItem('pendingRoute')
