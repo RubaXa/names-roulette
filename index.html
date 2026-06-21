@@ -214,17 +214,24 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 .tabs{display:flex;gap:6px;margin-bottom:18px;border-bottom:1px solid var(--border);padding-bottom:12px}
 .tab{padding:6px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;color:var(--t2);background:none;border:none;transition:all .15s}
 .tab.on{background:var(--surface);color:var(--text)}
-.result-item{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:13px 16px;display:flex;align-items:center;gap:14px;margin-bottom:8px}
-.r-rank{font-size:18px;font-weight:900;width:28px;text-align:center;flex-shrink:0;color:var(--t3)}
-.r-rank.gold{color:#FFD700}
-.r-rank.silver{color:#C0C0C0}
-.r-rank.bronze{color:#CD7F32}
-.r-name-col{flex:1;min-width:0}
-.r-name{font-size:15px;font-weight:700;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.r-origin{font-size:12px;color:var(--t2)}
-.r-score-col{text-align:right;flex-shrink:0}
-.r-stars{font-size:13px;margin-bottom:1px}
-.r-avg{font-size:12px;color:var(--t2)}
+.penalty-ctrl{padding:4px 0 16px}
+.penalty-label{font-size:12px;color:var(--t2);margin-bottom:6px;display:flex;justify-content:space-between}
+.pen-range{width:100%;cursor:pointer;accent-color:var(--accent)}
+.res-item{display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--surface);border:1px solid var(--border);border-radius:12px;margin-bottom:8px}
+.res-rank{font-size:16px;font-weight:900;width:26px;text-align:center;flex-shrink:0;color:var(--t3)}
+.res-body{flex:1;min-width:0}
+.res-name{font-size:15px;font-weight:700;margin-bottom:4px}
+.res-origin{font-size:11px;color:var(--t2);font-weight:400;margin-left:6px}
+.res-bar{height:8px;border-radius:4px;overflow:hidden;display:flex;background:var(--surface2);margin-bottom:5px}
+.res-seg{height:100%;transition:width .3s}
+.res-votes{display:flex;gap:10px;flex-wrap:wrap}
+.res-vote-chip{font-size:12px;color:var(--t2)}
+.res-score{font-size:17px;font-weight:800;flex-shrink:0}
+/* breakdown */
+.bd-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:10px}
+.bd-title{font-weight:600;font-size:13px;color:var(--t2);margin-bottom:10px}
+.bd-row{display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)}
+.bd-row:last-child{border-bottom:none}
 
 /* LOADING */
 .loading-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;flex-direction:column;gap:12px;color:var(--t2)}
@@ -267,6 +274,21 @@ const RATINGS = [
   { score: 3, emoji: '👍', label: 'Нравится' },
   { score: 4, emoji: '❤️', label: 'Обожаю' },
 ]
+const RATING_COLORS = ['#c0392b','#e67e22','#4a90e2','#e91e63']
+
+// Approximate real-world popularity (0=rare/unique, 1=very common in Russia)
+const NAME_POPULARITY = {
+  'Анна':1,'Мария':1,'Елена':0.95,'Ольга':0.9,'Наталья':0.9,'Ирина':0.85,
+  'Светлана':0.8,'Татьяна':0.8,'Екатерина':0.8,'Людмила':0.75,'Надежда':0.75,
+  'Анастасия':0.75,'Александра':0.7,'Юлия':0.7,'Нина':0.65,'Галина':0.65,
+  'Валентина':0.65,'Дарья':0.6,'Виктория':0.6,'Вера':0.6,'Зинаида':0.55,
+  'Лариса':0.55,'Тамара':0.55,'Алина':0.55,'Полина':0.55,'Соня':0.5,
+  'Кристина':0.5,'Ксения':0.5,'Вероника':0.5,'Алёна':0.5,'Валерия':0.5,
+  'Диана':0.45,'Маргарита':0.45,'Варвара':0.4,'Карина':0.4,'Ангелина':0.4,
+  'Милана':0.4,'Мила':0.4,'Дарина':0.35,
+}
+
+function clampScore(s) { return Math.min(Math.max(Math.round(s), 1), RATINGS.length) }
 
 const CARD_BG = [
   ['#FF6B9D','#FF9A5C'],['#7B68EE','#48C0A3'],['#FFD93D','#FF9B44'],['#4FACFE','#00F2FE'],
@@ -1433,73 +1455,89 @@ async function renderResults(spaceId) {
   })
 }
 
-function scoreToStars(avg) {
-  const filled = Math.round(avg)
-  return RATINGS[filled - 1]?.emoji || '😐'
+function renderAggregate(allVotes) {
+  document.getElementById('results-content').innerHTML = `
+    <div class="penalty-ctrl">
+      <div class="penalty-label">
+        <span>Штраф за популярность имени</span>
+        <span id="pen-val">0%</span>
+      </div>
+      <input type="range" id="pen-slider" class="pen-range" min="0" max="100" value="0">
+    </div>
+    <div id="res-list"></div>`
+  const render = () => {
+    const penalty = +document.getElementById('pen-slider').value / 100
+    document.getElementById('pen-val').textContent = Math.round(penalty * 100) + '%'
+    renderAggregateItems(allVotes, penalty)
+  }
+  document.getElementById('pen-slider').oninput = render
+  render()
 }
 
-function renderAggregate(allVotes) {
-  const totals = {}
-  const counts = {}
+function renderAggregateItems(allVotes, penalty) {
+  const dist = {}
   Object.values(allVotes).forEach(uv => {
-    Object.entries(uv).forEach(([name, score]) => {
-      totals[name] = (totals[name] || 0) + score
-      counts[name] = (counts[name] || 0) + 1
+    Object.entries(uv).forEach(([name, rawScore]) => {
+      const s = clampScore(rawScore)
+      if (!dist[name]) dist[name] = { 1:0, 2:0, 3:0, 4:0, total:0, sum:0 }
+      dist[name][s]++; dist[name].total++; dist[name].sum += s
     })
   })
 
-  const ranked = Object.keys(totals)
-    .map(name => ({
-      name,
-      avg: totals[name] / counts[name],
-      count: counts[name],
-      meta: state.names.find(n => n.name === name) || { name }
+  const ranked = Object.entries(dist)
+    .map(([name, d]) => ({
+      name, d,
+      avg: d.sum / d.total,
+      meta: state.names.find(n => n.name === name) || { name },
+      pop: NAME_POPULARITY[name] || 0.1,
     }))
+    .map(x => ({ ...x, score: x.avg - penalty * x.pop * RATINGS.length }))
     .filter(x => x.avg >= 3)
-    .sort((a, b) => b.avg - a.avg)
+    .sort((a, b) => b.score - a.score)
 
   if (!ranked.length) {
-    document.getElementById('results-content').innerHTML = '<div class="empty-state"><div class="empty-icon">🤔</div><p class="empty-text">Нет имён с оценкой ≥ нейтрально</p></div>'
+    document.getElementById('res-list').innerHTML = '<div class="empty-state"><div class="empty-icon">🤔</div><p class="empty-text">Нет имён с оценкой ≥ нейтрально</p></div>'
     return
   }
 
-  const items = ranked.slice(0, 50).map((x, i) => {
-    const rankCls = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : ''
-    const rankLabel = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1)
+  document.getElementById('res-list').innerHTML = ranked.slice(0, 50).map((x, i) => {
+    const rank = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1)
+    const segs = RATINGS.map(r => {
+      const pct = (x.d[r.score] / x.d.total * 100).toFixed(1)
+      return `<div class="res-seg" style="width:${pct}%;background:${RATING_COLORS[r.score-1]}"></div>`
+    }).join('')
+    const chips = RATINGS.filter(r => x.d[r.score] > 0)
+      .map(r => `<span class="res-vote-chip">${r.emoji} ${x.d[r.score]}</span>`).join('')
     return `
-      <div class="result-item">
-        <div class="r-rank ${rankCls}">${rankLabel}</div>
-        <div class="r-name-col">
-          <div class="r-name">${esc(x.name)}</div>
-          ${x.meta.origin ? `<div class="r-origin">${esc(x.meta.origin)}</div>` : ''}
+      <div class="res-item">
+        <div class="res-rank">${rank}</div>
+        <div class="res-body">
+          <div class="res-name">${esc(x.name)}${x.meta.origin ? `<span class="res-origin">${esc(x.meta.origin)}</span>` : ''}</div>
+          <div class="res-bar">${segs}</div>
+          <div class="res-votes">${chips}</div>
         </div>
-        <div class="r-score-col">
-          <div class="r-stars">${scoreToStars(x.avg)}</div>
-          <div class="r-avg">${x.avg.toFixed(1)} · ${x.count} оц.</div>
-        </div>
+        <div class="res-score">${x.avg.toFixed(1)}</div>
       </div>`
   }).join('')
-
-  document.getElementById('results-content').innerHTML = items
 }
 
 function renderBreakdown(allVotes) {
-  const uids = Object.keys(allVotes)
-  const items = uids.map(uid => {
-    const votes = allVotes[uid]
-    const loved = Object.entries(votes).filter(([, s]) => s >= 4).sort((a, b) => b[1] - a[1]).slice(0, 5)
+  const items = Object.entries(allVotes).map(([uid, votes]) => {
+    const sorted = Object.entries(votes)
+      .map(([name, s]) => [name, clampScore(s)])
+      .filter(([, s]) => s >= 3)
+      .sort((a, b) => b[1] - a[1])
     return `
-      <div class="card" style="margin-bottom:12px;padding:16px">
-        <div style="font-weight:600;font-size:14px;margin-bottom:10px;color:var(--t2)">${uid === state.user?.uid ? '👤 Вы' : 'Участник'}</div>
-        ${loved.map(([name, s]) => `
-          <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">
+      <div class="bd-card">
+        <div class="bd-title">${uid === state.user?.uid ? '👤 Вы' : 'Участник'}</div>
+        ${sorted.map(([name, s]) => `
+          <div class="bd-row">
             <span style="font-size:14px;font-weight:500">${esc(name)}</span>
-            <span style="font-size:18px">${RATINGS[s - 1]?.emoji}</span>
+            <span style="font-size:18px">${RATINGS[s-1].emoji}</span>
           </div>`).join('')}
-        ${!loved.length ? '<div style="font-size:13px;color:var(--t2)">Нет любимых имён</div>' : ''}
+        ${!sorted.length ? '<div style="font-size:13px;color:var(--t2)">Нет понравившихся имён</div>' : ''}
       </div>`
   }).join('')
-
   document.getElementById('results-content').innerHTML = items || '<div class="empty-state"><div class="empty-icon">📊</div><p class="empty-text">Нет данных</p></div>'
 }
 
