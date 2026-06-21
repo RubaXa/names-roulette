@@ -134,7 +134,6 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 .card-top-btn{background:rgba(0,0,0,.25);border:none;border-radius:8px;color:rgba(255,255,255,.7);font-size:12px;padding:6px 11px;cursor:pointer;transition:all .15s}
 .card-top-btn:hover{background:rgba(0,0,0,.45);color:white}
 .card-top-btn:disabled{opacity:.3;cursor:not-allowed}
-.card-idx{position:absolute;top:14px;left:16px;font-size:11px;font-weight:700;color:rgba(255,255,255,.5);z-index:2;letter-spacing:.05em}
 @keyframes card-in{from{transform:translateY(16px) scale(.97)}to{transform:none}}
 @keyframes fly-left{
   0%  {transform:translateX(0) rotate(0deg);opacity:1}
@@ -164,7 +163,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 .card-next .card-overlay{opacity:.4}
 
 .rating-section{flex-shrink:0;margin-top:12px;position:relative;z-index:3}
-.rating-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+.rating-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
 .r-btn{display:flex;flex-direction:column;align-items:center;gap:5px;padding:11px 4px;border-radius:14px;border:2px solid var(--border);background:var(--surface);cursor:pointer;transition:all .15s;outline:none}
 .r-btn:hover{border-color:var(--accent)}
 .r-btn.active{border-color:white;background:rgba(255,255,255,.1);transform:scale(1.04)}
@@ -263,11 +262,10 @@ const FB_CONFIG = {
 }
 
 const RATINGS = [
-  { score: 1, emoji: '❌', label: 'Точно нет' },
-  { score: 2, emoji: '👎', label: 'Скорее нет' },
-  { score: 3, emoji: '😐', label: 'Нейтрально' },
-  { score: 4, emoji: '👍', label: 'Нравится' },
-  { score: 5, emoji: '❤️', label: 'Обожаю' },
+  { score: 1, emoji: '💀', label: 'Никогда' },
+  { score: 2, emoji: '👎', label: 'Не нравится' },
+  { score: 3, emoji: '👍', label: 'Нравится' },
+  { score: 4, emoji: '❤️', label: 'Обожаю' },
 ]
 
 const CARD_BG = [
@@ -947,7 +945,7 @@ function buildCardWrap(nameData, extraCls) {
           <button class="card-top-btn card-back-btn" ${state.history.length ? '' : 'disabled'}>← Назад</button>
           <button class="card-top-btn card-skip-btn">Пропустить</button>
         </div>
-        <div class="card-idx">#${idx + 1}</div>
+
         <div class="card-content">
           <div class="card-name">${esc(nameData.name)}</div>
           ${nameData.meaning ? `<div class="card-meaning">${esc(nameData.meaning)}</div>` : ''}
@@ -1026,7 +1024,7 @@ async function advanceCard(spaceId, isVote, score) {
   const current = queue[0]
   if (!current) return
   state.history.push({ name: current.name, isVote, score })
-  const dir = isVote ? (score <= 2 ? 'left' : score >= 4 ? 'right' : 'left') : 'up'
+  const dir = isVote ? (score <= 2 ? 'left' : 'right') : 'up'
   const deck = document.getElementById('card-deck')
 
   await flyAndAdvance(dir, deck)
