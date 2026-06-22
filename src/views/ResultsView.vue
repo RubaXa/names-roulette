@@ -14,12 +14,39 @@
     </template>
 
     <template v-if="mainTab === 'rating' && !loading">
-      <div class="penalty-ctrl">
-        <div class="penalty-label">
-          <span>Штраф за популярность имени</span>
-          <span>{{ penalty }}%</span>
+      <div class="pen-grid">
+        <div class="pen-card">
+          <div class="pen-hd">
+            <span class="pen-lbl pen-lbl-pop">Популярность</span>
+            <span class="pen-val">{{ penaltyPop }}%</span>
+          </div>
+          <input class="pen-range" type="range" min="0" max="100" step="1" v-model.number="penaltyPop" />
+          <div class="pen-sub">Анна (0.95), Мария (0.88)…</div>
         </div>
-        <input class="pen-range" type="range" min="0" max="100" step="1" v-model.number="penalty" />
+        <div class="pen-card">
+          <div class="pen-hd">
+            <span class="pen-lbl pen-lbl-dis">Вето-голос</span>
+            <span class="pen-val">{{ penaltyDissent }}%</span>
+          </div>
+          <input class="pen-range" type="range" min="0" max="100" step="1" v-model.number="penaltyDissent" />
+          <div class="pen-sub">Штраф за каждую оценку «1»</div>
+        </div>
+        <div class="pen-card">
+          <div class="pen-hd">
+            <span class="pen-lbl pen-lbl-sig">Разброс мнений</span>
+            <span class="pen-val">{{ penaltySigma }}%</span>
+          </div>
+          <input class="pen-range" type="range" min="0" max="100" step="1" v-model.number="penaltySigma" />
+          <div class="pen-sub">[1,5,1,5] хуже [3,3,4,4]</div>
+        </div>
+        <div class="pen-card">
+          <div class="pen-hd">
+            <span class="pen-lbl pen-lbl-len">Длина имени</span>
+            <span class="pen-val">{{ penaltyLen }}%</span>
+          </div>
+          <input class="pen-range" type="range" min="0" max="100" step="1" v-model.number="penaltyLen" />
+          <div class="pen-sub">Идеал 5–7 букв; Ия (2), Анастасия (9)</div>
+        </div>
       </div>
       <div class="viz-switch">
         <button class="viz-btn" :class="{ on: vizMode === 'likert' }" @click="vizMode = 'likert'">≡ Ликерт</button>
@@ -41,26 +68,37 @@
             <div class="lik-name" :title="item.name">
               {{ item.name }}<span v-if="item.origin" class="lik-origin"> · {{ item.origin }}</span>
             </div>
-            <div class="lik-bar-wrap">
-              <div class="lik-neg-half">
-                <template v-for="uid in participants" :key="'n'+uid">
-                  <div class="lik-seg"
-                    :class="{ 'lik-empty': !(allVotes[uid]?.[item.name] <= 2 && allVotes[uid]?.[item.name]) }"
-                    :style="{ width: (100/participants.length)+'%', background: (allVotes[uid]?.[item.name] <= 2 && allVotes[uid]?.[item.name]) ? RATING_COLORS[allVotes[uid][item.name]-1] : undefined }"
-                    :title="allVotes[uid]?.[item.name] ? (uid===user?.uid?'Вы':'Участник')+': '+RATINGS[allVotes[uid][item.name]-1].label : ''" />
-                </template>
+            <div class="lik-mid">
+              <div class="lik-bar-wrap">
+                <div class="lik-neg-half">
+                  <template v-for="uid in participants" :key="'n'+uid">
+                    <div class="lik-seg"
+                      :class="{ 'lik-empty': !(allVotes[uid]?.[item.name] <= 2 && allVotes[uid]?.[item.name]) }"
+                      :style="{ width: (100/participants.length)+'%', background: (allVotes[uid]?.[item.name] <= 2 && allVotes[uid]?.[item.name]) ? RATING_COLORS[allVotes[uid][item.name]-1] : undefined }"
+                      :title="allVotes[uid]?.[item.name] ? (uid===user?.uid?'Вы':'Участник')+': '+RATINGS[allVotes[uid][item.name]-1].label : ''" />
+                  </template>
+                </div>
+                <div class="lik-center"></div>
+                <div class="lik-pos-half">
+                  <template v-for="uid in participants" :key="'p'+uid">
+                    <div class="lik-seg"
+                      :class="{ 'lik-empty': !(allVotes[uid]?.[item.name] >= 3) }"
+                      :style="{ width: (100/participants.length)+'%', background: allVotes[uid]?.[item.name] >= 3 ? RATING_COLORS[allVotes[uid][item.name]-1] : undefined }"
+                      :title="allVotes[uid]?.[item.name] ? (uid===user?.uid?'Вы':'Участник')+': '+RATINGS[allVotes[uid][item.name]-1].label : ''" />
+                  </template>
+                </div>
               </div>
-              <div class="lik-center"></div>
-              <div class="lik-pos-half">
-                <template v-for="uid in participants" :key="'p'+uid">
-                  <div class="lik-seg"
-                    :class="{ 'lik-empty': !(allVotes[uid]?.[item.name] >= 3) }"
-                    :style="{ width: (100/participants.length)+'%', background: allVotes[uid]?.[item.name] >= 3 ? RATING_COLORS[allVotes[uid][item.name]-1] : undefined }"
-                    :title="allVotes[uid]?.[item.name] ? (uid===user?.uid?'Вы':'Участник')+': '+RATINGS[allVotes[uid][item.name]-1].label : ''" />
-                </template>
+              <div v-if="item.p.pop > 0.05 || item.p.dis > 0.05 || item.p.sig > 0.05 || item.p.len > 0.05" class="pchips">
+                <span v-if="item.p.pop > 0.05" class="pchip pchip-pop">pop −{{ item.p.pop.toFixed(1) }}</span>
+                <span v-if="item.p.dis > 0.05" class="pchip pchip-dis">veto −{{ item.p.dis.toFixed(1) }}</span>
+                <span v-if="item.p.sig > 0.05" class="pchip pchip-sig">σ −{{ item.p.sig.toFixed(1) }}</span>
+                <span v-if="item.p.len > 0.05" class="pchip pchip-len">len −{{ item.p.len.toFixed(1) }}</span>
               </div>
             </div>
-            <div class="lik-score">{{ item.avg.toFixed(1) }}</div>
+            <div class="lik-score">
+              {{ item.score.toFixed(1) }}
+              <div v-if="item.score < item.avg - 0.05" class="lik-avg">{{ item.avg.toFixed(1) }}</div>
+            </div>
           </div>
         </template>
 
@@ -73,7 +111,7 @@
                   <th class="heat-th heat-th-rank">#</th>
                   <th class="heat-th heat-th-name">Имя</th>
                   <th v-for="uid in participants" :key="uid" class="heat-th">{{ uid === user?.uid ? 'Вы' : 'Уч.' }}</th>
-                  <th class="heat-th">Avg</th>
+                  <th class="heat-th">Score</th>
                 </tr>
               </thead>
               <tbody>
@@ -87,7 +125,9 @@
                     </div>
                     <div v-else class="heat-cell heat-cell-empty">—</div>
                   </td>
-                  <td class="heat-td-avg">{{ item.avg.toFixed(1) }}</td>
+                  <td class="heat-td-avg" :title="item.score < item.avg - 0.05 ? 'avg: '+item.avg.toFixed(1) : ''">
+                    <span :class="{ 'heat-penalized': item.score < item.avg - 0.05 }">{{ item.score.toFixed(1) }}</span>
+                  </td>
                 </tr>
               </tbody>
             </table>
@@ -99,19 +139,30 @@
           <div v-for="(item, i) in aggregated" :key="item.name" class="strip-row">
             <div class="strip-rank">{{ i + 1 }}</div>
             <div class="strip-name" :title="item.name">{{ item.name }}</div>
-            <div class="strip-axis">
-              <div v-for="n in 5" :key="n" class="strip-tick" :style="{ left: (n-1)/4*100+'%' }"></div>
-              <div class="strip-avg-line" :style="{ left: ((item.avg-1)/4*100)+'%' }"></div>
-              <div v-for="(uid, j) in participants" :key="uid"
-                class="strip-dot"
-                :style="{
-                  left: ((allVotes[uid]?.[item.name] || 3)-1)/4*100+'%',
-                  background: PTCOLS[j % PTCOLS.length],
-                  top: (2 + j * 5) + 'px',
-                }"
-                :title="allVotes[uid]?.[item.name] ? (uid===user?.uid?'Вы':'Участник')+': '+RATINGS[allVotes[uid][item.name]-1].label : '—'" />
+            <div class="strip-mid">
+              <div class="strip-axis">
+                <div v-for="n in 5" :key="n" class="strip-tick" :style="{ left: (n-1)/4*100+'%' }"></div>
+                <div class="strip-avg-line" :style="{ left: ((item.avg-1)/4*100)+'%' }"></div>
+                <div v-for="(uid, j) in participants" :key="uid"
+                  class="strip-dot"
+                  :style="{
+                    left: ((allVotes[uid]?.[item.name] || 3)-1)/4*100+'%',
+                    background: PTCOLS[j % PTCOLS.length],
+                    top: (2 + j * 5) + 'px',
+                  }"
+                  :title="allVotes[uid]?.[item.name] ? (uid===user?.uid?'Вы':'Участник')+': '+RATINGS[allVotes[uid][item.name]-1].label : '—'" />
+              </div>
+              <div v-if="item.p.pop > 0.05 || item.p.dis > 0.05 || item.p.sig > 0.05 || item.p.len > 0.05" class="pchips">
+                <span v-if="item.p.pop > 0.05" class="pchip pchip-pop">pop −{{ item.p.pop.toFixed(1) }}</span>
+                <span v-if="item.p.dis > 0.05" class="pchip pchip-dis">veto −{{ item.p.dis.toFixed(1) }}</span>
+                <span v-if="item.p.sig > 0.05" class="pchip pchip-sig">σ −{{ item.p.sig.toFixed(1) }}</span>
+                <span v-if="item.p.len > 0.05" class="pchip pchip-len">len −{{ item.p.len.toFixed(1) }}</span>
+              </div>
             </div>
-            <div class="strip-score">{{ item.avg.toFixed(1) }}</div>
+            <div class="strip-score">
+              {{ item.score.toFixed(1) }}
+              <div v-if="item.score < item.avg - 0.05" class="strip-avg">{{ item.avg.toFixed(1) }}</div>
+            </div>
           </div>
         </template>
       </template>
@@ -140,10 +191,13 @@
 //   'heat'   — grid table: rows = names sorted by score, columns = participants, cell = emoji on score-colored bg.
 //   'strip'  — dot plot: each name is a 1–5 axis, each participant is a colored dot at their score position.
 //
-// Penalty slider (penalty, 0–100 int):
-//   @invariant score = avg - (penalty/100) * popularity * RATINGS.length
-//   Popular names (Анна, Соня — high popularity) drop in rank as penalty increases.
-//   Affects ranking order only; raw vote cells in heat/strip/likert always show avg.
+// Four penalty sliders (0–100% each) — all affect only sort order; raw vote cells always show actual scores:
+//   @invariant score = avg − pPop − pDis − pSig − pLen (clamped to 0)
+//   pPop = (penaltyPop/100)     * popularity    * 2.0  — Анна (0.95), Мария (0.88) drop first
+//   pDis = (penaltyDissent/100) * dissentCount  * 0.8  — штраф за каждую оценку «1» от участника
+//   pSig = (penaltySigma/100)   * sigma         * 0.9  — [1,5,1,5] хуже [3,3,4,4]
+//   pLen = (penaltyLen/100)     * max(0,|len−6|) * 0.28 — идеал 5–7 букв; Ия (2), Анастасия (9) теряют
+//   `avg` always shown unmodified for context; active chips (pop/dis/σ/len) show each penalty's contribution.
 
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -155,7 +209,7 @@ import { fbDb, getDocs, collection } from '@/firebase/config.js'
 import { RATINGS, RATING_COLORS, clampScore } from '@/utils.js'
 import { toast } from '@/composables/useToast.js'
 
-// @purpose Fixed color palette for participant dots in strip/heat views (cycled by participant index).
+// @purpose Fixed color palette for participant dots in strip view (cycled by participant index).
 const PTCOLS = ['#7c5cbf', '#1a9e8f', '#c05a2a', '#2980b9', '#8e44ad']
 
 const route = useRoute()
@@ -166,7 +220,10 @@ const space = ref(null)
 const loading = ref(true)
 const mainTab = ref('rating')
 const vizMode = ref('likert')
-const penalty = ref(0)
+const penaltyPop     = ref(0)
+const penaltyDissent = ref(0)
+const penaltySigma   = ref(0)
+const penaltyLen     = ref(0)
 const allVotes = ref({}) // { uid: { name: score } } — loaded from Firestore subcollection votes/
 const user = currentUser
 
@@ -183,12 +240,11 @@ const participants = computed(() => {
 })
 
 /**
- * @purpose Aggregate all participant votes into a ranked list, sorted by popularity-penalised score.
- * @invariant `avg` is always the raw unpenalised average — used for display.
- * @invariant `score` = avg - (penalty/100) * popularity * RATINGS.length — used only for sort order.
- * @invariant `popularity` comes from the enriched names dataset (0–1 float from real demographic data).
- *   Popular names (Анна, Соня, Мария) have high popularity and drop in rank as penalty increases.
- *   Fallback popularity = 0.1 when name is absent from the dataset (e.g. network miss).
+ * @purpose Aggregate all participant votes into a ranked list, sorted by penalised score.
+ * @invariant `avg` is always the raw unpenalised average — used for display and chip labels.
+ * @invariant `score` = avg − pPop − pDis − pSig − pLen — used only for sort order.
+ * @invariant `p` carries each penalty's numerical contribution for chip display.
+ * @invariant `popularity` from names_enriched.json (0–1 float, real demographic data).
  */
 const aggregated = computed(() => {
   // #region START_AGGREGATE_SCORES
@@ -207,8 +263,18 @@ const aggregated = computed(() => {
       scores.forEach(s => { voteCounts[s] = (voteCounts[s] || 0) + 1 })
       const avg = scores.reduce((s, v) => s + v, 0) / scores.length
       const popularity = byName[name]?.popularity ?? 0.1
-      const score = avg - (penalty.value / 100) * popularity * RATINGS.length
-      return { name, origin: byName[name]?.origin || '', avg, score, voteCounts, total: scores.length }
+      const sigma = scores.length > 1
+        ? Math.sqrt(scores.reduce((s, v) => s + (v - avg) ** 2, 0) / scores.length)
+        : 0
+      const dissentCount = scores.filter(s => s === 1).length
+      const lenDev = Math.max(0, Math.abs(name.length - 6))
+
+      const pPop = (penaltyPop.value     / 100) * popularity   * 2.0
+      const pDis = (penaltyDissent.value / 100) * dissentCount * 0.8
+      const pSig = (penaltySigma.value   / 100) * sigma        * 0.9
+      const pLen = (penaltyLen.value     / 100) * lenDev       * 0.28
+      const score = Math.max(0, avg - pPop - pDis - pSig - pLen)
+      return { name, origin: byName[name]?.origin || '', avg, score, voteCounts, total: scores.length, p: { pop: pPop, dis: pDis, sig: pSig, len: pLen } }
     })
     .sort((a, b) => b.score - a.score)
   // #endregion END_AGGREGATE_SCORES

@@ -226,26 +226,41 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 .tabs{display:flex;gap:6px;margin-bottom:18px;border-bottom:1px solid var(--border);padding-bottom:12px}
 .tab{padding:6px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;color:var(--t2);background:none;border:none;transition:all .15s}
 .tab.on{background:var(--surface);color:var(--text)}
-.penalty-ctrl{padding:4px 0 12px}
-.penalty-label{font-size:12px;color:var(--t2);margin-bottom:6px;display:flex;justify-content:space-between}
+/* penalty grid — 4 sliders in 2×2 layout */
+.pen-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.pen-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 12px}
+.pen-hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.pen-lbl{font-size:12px;font-weight:600}
+.pen-lbl-pop{color:#f7a16f}.pen-lbl-dis{color:var(--danger)}.pen-lbl-sig{color:var(--accent)}.pen-lbl-len{color:var(--t2)}
+.pen-val{font-size:12px;color:var(--text)}
+.pen-sub{font-size:11px;color:var(--t3);margin-top:3px}
 .pen-range{width:100%;cursor:pointer;accent-color:var(--accent)}
+/* penalty chips — show each penalty's contribution per name row */
+.pchips{display:flex;gap:4px;flex-wrap:wrap;margin-top:3px}
+.pchip{font-size:10px;padding:1px 6px;border-radius:3px;font-weight:500}
+.pchip-pop{background:rgba(247,161,111,.18);color:#f7a16f}
+.pchip-dis{background:rgba(247,111,111,.18);color:var(--danger)}
+.pchip-sig{background:rgba(124,111,247,.18);color:var(--accent)}
+.pchip-len{background:rgba(136,136,153,.18);color:var(--t2)}
 /* viz mode switcher */
 .viz-switch{display:flex;gap:4px;margin-bottom:14px}
 .viz-btn{padding:5px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;color:var(--t2);background:none;border:1px solid var(--border);transition:all .15s}
 .viz-btn.on{background:var(--surface);color:var(--text);border-color:var(--t3)}
 /* A: likert diverging bars */
-.lik-row{display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--surface2)}
+.lik-row{display:flex;align-items:flex-start;gap:8px;padding:6px 0;border-bottom:1px solid var(--surface2)}
 .lik-row:last-child{border-bottom:none}
-.lik-rank{font-size:11px;font-weight:700;width:18px;text-align:center;flex-shrink:0;color:var(--t3)}
-.lik-name{font-size:12px;font-weight:600;width:90px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lik-rank{font-size:11px;font-weight:700;width:18px;text-align:center;flex-shrink:0;color:var(--t3);padding-top:3px}
+.lik-name{font-size:12px;font-weight:600;width:90px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-top:3px}
 .lik-origin{font-size:10px;color:var(--t2);font-weight:400}
-.lik-bar-wrap{flex:1;display:flex;height:20px;border-radius:4px;overflow:hidden;gap:1px}
+.lik-mid{flex:1;display:flex;flex-direction:column;gap:3px;min-width:0}
+.lik-bar-wrap{display:flex;height:20px;border-radius:4px;overflow:hidden;gap:1px}
 .lik-neg-half{flex:1;display:flex;justify-content:flex-end;overflow:hidden}
 .lik-pos-half{flex:1;display:flex;overflow:hidden}
 .lik-center{width:2px;background:var(--surface2);flex-shrink:0}
 .lik-seg{height:100%}
 .lik-empty{background:var(--surface2)}
-.lik-score{font-size:12px;font-weight:700;width:28px;text-align:right;flex-shrink:0;color:var(--text)}
+.lik-score{font-size:12px;font-weight:700;width:28px;text-align:right;flex-shrink:0;color:var(--text);padding-top:3px;display:flex;flex-direction:column;align-items:flex-end;gap:1px}
+.lik-avg{font-size:10px;color:var(--t3);text-decoration:line-through;font-weight:400}
 /* B: heat map */
 .heat-scroll{overflow-x:auto}
 .heat-table{width:100%;border-collapse:collapse}
@@ -260,16 +275,19 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 .heat-cell{width:28px;height:22px;border-radius:4px;display:inline-flex;align-items:center;justify-content:center;font-size:13px}
 .heat-cell-empty{background:var(--surface2);color:var(--t3);font-size:11px}
 .heat-td-avg{font-size:12px;font-weight:700;text-align:center;padding:2px 8px;color:var(--text)}
+.heat-penalized{color:var(--accent);font-size:11px}
 /* C: strip plot */
-.strip-row{display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--surface2)}
+.strip-row{display:flex;align-items:flex-start;gap:8px;padding:6px 0;border-bottom:1px solid var(--surface2)}
 .strip-row:last-child{border-bottom:none}
-.strip-rank{font-size:11px;font-weight:700;width:18px;text-align:center;flex-shrink:0;color:var(--t3)}
-.strip-name{font-size:12px;font-weight:600;width:90px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.strip-axis{flex:1;position:relative;height:26px}
+.strip-rank{font-size:11px;font-weight:700;width:18px;text-align:center;flex-shrink:0;color:var(--t3);padding-top:5px}
+.strip-name{font-size:12px;font-weight:600;width:90px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-top:5px}
+.strip-mid{flex:1;display:flex;flex-direction:column;gap:3px;min-width:0}
+.strip-axis{position:relative;height:26px}
 .strip-tick{position:absolute;top:0;bottom:0;width:1px;background:var(--surface2);transform:translateX(-50%)}
 .strip-avg-line{position:absolute;top:2px;bottom:2px;width:2px;border-radius:1px;background:var(--border);transform:translateX(-50%)}
 .strip-dot{position:absolute;width:16px;height:16px;border-radius:50%;transform:translateX(-50%);font-size:10px;display:flex;align-items:center;justify-content:center}
-.strip-score{font-size:12px;font-weight:700;width:28px;text-align:right;flex-shrink:0;color:var(--text)}
+.strip-score{font-size:12px;font-weight:700;width:28px;text-align:right;flex-shrink:0;color:var(--text);padding-top:5px;display:flex;flex-direction:column;align-items:flex-end;gap:1px}
+.strip-avg{font-size:10px;color:var(--t3);text-decoration:line-through;font-weight:400}
 /* breakdown */
 .bd-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:10px}
 .bd-title{font-weight:600;font-size:13px;color:var(--t2);margin-bottom:10px}
