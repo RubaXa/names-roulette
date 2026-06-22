@@ -9,3 +9,4 @@ test-images/
 test_fal.py
 test_fal.mjs
 test_models.py
+dist/
