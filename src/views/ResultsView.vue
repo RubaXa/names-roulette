@@ -66,7 +66,7 @@
           <div v-for="(item, i) in aggregated" :key="item.name" class="lik-row">
             <div class="lik-rank">{{ i + 1 }}</div>
             <div class="lik-name-col">
-              <div v-if="item.p.pop > 0.05 || item.p.dis > 0.05 || item.p.sig > 0.05 || item.p.len > 0.05" class="pchips-above">
+              <div class="pchips-row">
                 <span v-if="item.p.pop > 0.05" class="pchip-ab pchip-pop" :title="'Популярность −'+item.p.pop.toFixed(2)">−{{ item.p.pop.toFixed(1) }}</span>
                 <span v-if="item.p.dis > 0.05" class="pchip-ab pchip-dis" :title="'Вето −'+item.p.dis.toFixed(2)">−{{ item.p.dis.toFixed(1) }}</span>
                 <span v-if="item.p.sig > 0.05" class="pchip-ab pchip-sig" :title="'Разброс −'+item.p.sig.toFixed(2)">−{{ item.p.sig.toFixed(1) }}</span>
@@ -139,7 +139,7 @@
           <div v-for="(item, i) in aggregated" :key="item.name" class="strip-row">
             <div class="strip-rank">{{ i + 1 }}</div>
             <div class="strip-name-col">
-              <div v-if="item.p.pop > 0.05 || item.p.dis > 0.05 || item.p.sig > 0.05 || item.p.len > 0.05" class="pchips-above">
+              <div class="pchips-row">
                 <span v-if="item.p.pop > 0.05" class="pchip-ab pchip-pop" :title="'Популярность −'+item.p.pop.toFixed(2)">−{{ item.p.pop.toFixed(1) }}</span>
                 <span v-if="item.p.dis > 0.05" class="pchip-ab pchip-dis" :title="'Вето −'+item.p.dis.toFixed(2)">−{{ item.p.dis.toFixed(1) }}</span>
                 <span v-if="item.p.sig > 0.05" class="pchip-ab pchip-sig" :title="'Разброс −'+item.p.sig.toFixed(2)">−{{ item.p.sig.toFixed(1) }}</span>
