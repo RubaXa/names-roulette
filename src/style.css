@@ -247,12 +247,12 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 .viz-btn{padding:5px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;color:var(--t2);background:none;border:1px solid var(--border);transition:all .15s}
 .viz-btn.on{background:var(--surface);color:var(--text);border-color:var(--t3)}
 /* A: likert diverging bars */
-.lik-row{display:flex;align-items:flex-end;gap:8px;padding:6px 0;border-bottom:1px solid var(--surface2)}
+.lik-row{display:flex;align-items:flex-end;gap:8px;padding:14px 0 6px;border-bottom:1px solid var(--surface2)}
 .lik-row:last-child{border-bottom:none}
 .lik-rank{font-size:11px;font-weight:700;width:18px;text-align:center;flex-shrink:0;color:var(--t3);padding-bottom:3px}
-.lik-name-col{width:90px;flex-shrink:0;display:flex;flex-direction:column;gap:2px}
-.pchips-above{display:flex;gap:3px;flex-wrap:wrap}
-.pchip-ab{font-size:9px;padding:0 4px;border-radius:2px;font-weight:600;line-height:1.6;white-space:nowrap}
+.lik-name-col{width:90px;flex-shrink:0;position:relative}
+.pchips-above{position:absolute;bottom:100%;left:0;margin-bottom:2px;display:flex;gap:3px;pointer-events:none}
+.pchip-ab{font-size:8px;padding:0 3px;border-radius:2px;font-weight:700;line-height:1.5;white-space:nowrap}
 .lik-name{font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .lik-origin{font-size:10px;color:var(--t2);font-weight:400}
 .lik-mid{flex:1;min-width:0}
@@ -280,10 +280,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 .heat-td-avg{font-size:12px;font-weight:700;text-align:center;padding:2px 8px;color:var(--text)}
 .heat-penalized{color:var(--accent);font-size:11px}
 /* C: strip plot */
-.strip-row{display:flex;align-items:flex-end;gap:8px;padding:6px 0;border-bottom:1px solid var(--surface2)}
+.strip-row{display:flex;align-items:flex-end;gap:8px;padding:14px 0 6px;border-bottom:1px solid var(--surface2)}
 .strip-row:last-child{border-bottom:none}
 .strip-rank{font-size:11px;font-weight:700;width:18px;text-align:center;flex-shrink:0;color:var(--t3);padding-bottom:5px}
-.strip-name-col{width:90px;flex-shrink:0;display:flex;flex-direction:column;gap:2px}
+.strip-name-col{width:90px;flex-shrink:0;position:relative}
 .strip-name{font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .strip-mid{flex:1;min-width:0}
 .strip-axis{position:relative;height:26px}
