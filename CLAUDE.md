@@ -24,9 +24,12 @@ cp -r dist/* .
 git add -f index.html assets/ chart.html
 git commit -m "Deploy"
 git push origin gh-pages-deploy:gh-pages --force
-git checkout main
 git branch -D gh-pages-deploy
+git clean -fd
+git checkout main
 ```
+
+> `git clean -fd` нужен перед `checkout main` — иначе `chart.html` (untracked после cp) блокирует переключение ветки.
 
 **Делать это при каждом коммите в main**, который меняет исходники (`src/`, `public/`, `index.html`, `vite.config.js`).
 
@@ -63,11 +66,23 @@ GitHub Pages настроен на ветку `gh-pages`, папка `/ (root)`.
 | Разброс мнений | `(p/100) * sigma * 0.9` | [1,5,1,5] хуже [3,3,4,4] |
 | Длина имени | `(p/100) * max(0,\|len−6\|) * 0.28` | Ия (2 буквы), Анастасия (9 букв) |
 
-`score = avg − pPop − pDis − pSig − pLen` (не ниже 0). Цветные чипсы на каждой строке показывают вклад каждого штрафа.
+`score = avg − pPop − pDis − pSig − pLen` (не ниже 0). Цветные чипсы (`pchip-ab`) отображаются только в режимах `likert` и `strip` (не в `heat`) — показывают вклад каждого штрафа над именем строки. Контейнер `.pchips-row` всегда отрисовывается с `min-height: 13px` для равной высоты строк.
 
 **Данные:** `allVotes = { uid: { name: score } }` — загружается из Firestore `spaces/{id}/votes`, **не из IDB**. IDB хранит только голоса текущего пользователя для процесса голосования.
 
-**Скролл:** компонент использует Vue 3 fragment (нет внешнего `<div>`), чтобы `.results-view.view` был прямым flex-ребёнком `#app` — иначе `overflow-y:auto` не активируется.
+**Vue 3 fragment:** компонент не имеет внешнего `<div>`, чтобы `.results-view.view` был прямым flex-ребёнком `#app` — иначе `overflow-y:auto` не активируется.
+
+## VotingView — архитектурные решения
+
+[`src/views/VotingView.vue`](src/views/VotingView.vue)
+
+**Vue 3 fragment:** нет внешнего `<div>` wrapper — `<NavBar>`, `.done-view`, `.voting-view` и `.loading-screen` являются прямыми flex-детьми `#app`. Без этого `flex:1` на `.view` не работает и карточка голосования сжимается.
+
+**`isLoaded` guard:** при входе в `onMounted` имена загружаются до того, как `shuffledQueue` заполнен. На этом кадре `votingQueue.length === 0` и `total > 0` — без guard `isDone` было бы `true` на одну отрисовку, вызывая флеш «Вы оценили все N имён!». Исправлено: `isDone = computed(() => isLoaded.value && total.value > 0 && votingQueue.value.length === 0)`, где `isLoaded.value = true` устанавливается только после `shuffledQueue.value = shuffle(...)`.
+
+## HomeView — неочевидное
+
+[`src/views/HomeView.vue`](src/views/HomeView.vue) использует собственный inline `<nav>`, а **не** компонент `<NavBar>`. Это намеренно: домашняя страница имеет уникальную навигацию с табами и не нуждается в `backPath` или `SyncDot`.
 
 ## Тесты перед деплоем
 

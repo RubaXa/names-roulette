@@ -142,27 +142,16 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 .card-top-btn:hover{background:rgba(0,0,0,.45);color:white}
 .card-top-btn:disabled{opacity:.3;cursor:not-allowed}
 @keyframes card-in{from{transform:translateY(16px) scale(.97)}to{transform:none}}
-@keyframes fly-left{
-  0%  {transform:translateX(0) rotate(0deg);opacity:1}
-  100%{transform:translateX(-140%) rotate(-22deg);opacity:0}
-}
 @keyframes fly-right{
   0%  {transform:translateX(0) rotate(0deg);opacity:1}
   100%{transform:translateX(140%) rotate(22deg);opacity:0}
-}
-@keyframes fly-skip{
-  0%  {transform:translateY(0) rotate(0deg);opacity:1}
-  35% {transform:translateY(-18%) rotate(-8deg);opacity:1}
-  100%{transform:translateY(-115%) rotate(-18deg);opacity:0}
 }
 @keyframes fly-down{
   0%  {transform:translateY(0) rotate(0deg);opacity:1}
   100%{transform:translateY(130%) rotate(4deg);opacity:0}
 }
 .name-card{animation:card-in .22s ease-out;transform-origin:50% 30%}
-.name-card.fly-left{animation:fly-left .28s cubic-bezier(.4,0,1,1) forwards!important}
 .name-card.fly-right{animation:fly-right .28s cubic-bezier(.4,0,1,1) forwards!important}
-.name-card.fly-up{animation:fly-skip .28s cubic-bezier(.4,0,1,1) forwards!important}
 .name-card.fly-down{animation:fly-down .3s cubic-bezier(.4,0,1,1) forwards!important}
 .home-tabs{display:flex;background:var(--surface2);border-radius:12px;padding:3px;margin-bottom:20px}
 .home-tab{flex:1;padding:9px 4px;border-radius:9px;border:none;background:transparent;color:var(--t2);font-size:13px;font-weight:600;cursor:pointer;transition:all .15s}
@@ -235,9 +224,6 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 .pen-val{font-size:12px;color:var(--text)}
 .pen-sub{font-size:11px;color:var(--t3);margin-top:3px}
 .pen-range{width:100%;cursor:pointer;accent-color:var(--accent)}
-/* penalty chips — show each penalty's contribution per name row */
-.pchips{display:flex;gap:4px;flex-wrap:wrap;margin-top:3px}
-.pchip{font-size:10px;padding:1px 6px;border-radius:3px;font-weight:500}
 .pchip-pop{background:rgba(247,161,111,.18);color:#f7a16f}
 .pchip-dis{background:rgba(247,111,111,.18);color:var(--danger)}
 .pchip-sig{background:rgba(124,111,247,.18);color:var(--accent)}
