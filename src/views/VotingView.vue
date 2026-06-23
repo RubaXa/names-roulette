@@ -33,12 +33,20 @@
       </div>
 
       <div class="card-deck">
-        <!-- Ghost of the just-voted card: flies out while the stack shifts forward underneath -->
-        <div v-if="flyingCard" class="card-wrap" :class="flyingCard.dir" :style="{ zIndex: 6 }">
+        <!-- Ghost overlay: the voted card swiping OUT, or (on "Назад") the prior card sliding back IN.
+             During a rewind the real front card is hidden until the ghost lands → no duplicate. -->
+        <div v-if="flyingCard" class="card-wrap" :class="flyingCard.anim" :style="{ zIndex: 6 }">
           <div class="name-card" :style="cardBg(flyingCard.card)">
             <div class="card-image" :style="{ backgroundImage: `url('${imgUrl(flyingCard.card.name)}')` }"></div>
             <div class="card-overlay"></div>
-            <div class="card-content"><div class="card-name">{{ flyingCard.card.name }}</div></div>
+            <div class="card-content">
+              <div class="card-name">{{ flyingCard.card.name }}</div>
+              <div v-if="flyingCard.card.meaning" class="card-meaning">{{ flyingCard.card.meaning }}</div>
+              <div v-if="flyingCard.card.origin" class="card-origin">{{ flyingCard.card.origin }}</div>
+              <div v-if="(flyingCard.card.meaning || flyingCard.card.origin) && (flyingCard.card.nicknames?.length || flyingCard.card.funFact)" class="card-divider"></div>
+              <div v-if="flyingCard.card.nicknames?.length" class="card-nicknames">👥 {{ flyingCard.card.nicknames.join(' · ') }}</div>
+              <div v-if="flyingCard.card.funFact" class="card-fact">{{ flyingCard.card.funFact }}</div>
+            </div>
           </div>
         </div>
 
@@ -48,7 +56,7 @@
           :key="card.name"
           class="card-wrap"
           :class="['depth-' + i, i === 0 && 'card-current']"
-          :style="{ zIndex: 5 - i }"
+          :style="{ zIndex: 5 - i, visibility: (i === 0 && isRewinding) ? 'hidden' : null }"
         >
           <div class="name-card" :style="cardBg(card)">
             <div class="card-image" :style="{ backgroundImage: `url('${imgUrl(card.name)}')` }"></div>
@@ -168,6 +176,9 @@ const isCreator = computed(() => space.value?.creatorUid === user.value?.uid)
 // @purpose True when the current card is the one we stepped back to review — drives "Вперёд →"
 //   button visibility and the highlighted rating. See goBack/advanceKeep.
 const isReviewing = computed(() => !!pendingReview.value && pendingReview.value.name === currentCard.value?.name)
+// @purpose True while a "Назад" rewind ghost is sliding the prior card back in — used to hide the
+//   real (identical) front card underneath until the ghost lands, so they don't briefly double up.
+const isRewinding = computed(() => !!flyingCard.value && flyingCard.value.anim.startsWith('rewind'))
 
 function cardBg(nameData) {
   const all = getNamesByGroups(['all'])
@@ -265,7 +276,7 @@ async function advanceCard(score) {
   pendingReview.value = null
   history.value.push({ name: card.name, score })
 
-  flyingCard.value = { card, dir: swipeDir(score) }
+  flyingCard.value = { card, anim: swipeDir(score) }
   votes.value = { ...votes.value, [card.name]: score } // removes name from queue → stack shifts forward
   saveVote(card.name, score) // persist now, don't wait for the animation
 
@@ -283,7 +294,7 @@ async function advanceKeep() {
   pendingReview.value = null
   history.value.push({ name, score: originalScore })
 
-  flyingCard.value = { card, dir: swipeDir(originalScore) }
+  flyingCard.value = { card, anim: swipeDir(originalScore) }
   votes.value = { ...votes.value, [name]: originalScore }
   saveVote(name, originalScore)
 
@@ -303,8 +314,11 @@ async function saveVote(name, score) {
 // @purpose "← Назад": step back to the previously voted card to review/change it.
 // @invariant The vote stays in IDB; only removed from the in-memory `votes` so the name re-enters
 //   the queue at the front with pendingReview set (→ isReviewing → "Вперёд →" + highlighted rating).
+// @invariant The returning card slides back IN from the side it left (rewind-* ghost, mirror of the
+//   swipe-out), while the card it interrupts recedes one slot — the reverse of an advance.
 function goBack() {
   if (!history.value.length || isAnimating.value) return
+  isAnimating.value = true
   if (pendingReview.value) {
     votes.value = { ...votes.value, [pendingReview.value.name]: pendingReview.value.originalScore }
     pendingReview.value = null
@@ -315,5 +329,10 @@ function goBack() {
   votes.value = rest
   // Put the name back at front of queue
   shuffledQueue.value = [last.name, ...shuffledQueue.value.filter(n => n !== last.name)]
+
+  // Slide the returning card back in from the direction it originally flew out.
+  const byName = Object.fromEntries(activeNames.value.map(n => [n.name, n]))
+  flyingCard.value = { card: byName[last.name], anim: swipeDir(last.score).replace('swipe', 'rewind') }
+  setTimeout(() => { flyingCard.value = null; isAnimating.value = false }, FLY_MS)
 }
 </script>
