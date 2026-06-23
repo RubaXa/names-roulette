@@ -85,7 +85,7 @@
             class="r-btn"
             :class="{ active: isReviewing && pendingReview.originalScore === r.score }"
             :disabled="isAnimating"
-            @click="advanceCard(r.score)"
+            @click="advanceCard(r.score, $event)"
           >
             <span class="r-emoji">{{ r.emoji }}</span>
             <span class="r-lbl">{{ r.label }}</span>
@@ -269,8 +269,10 @@ onMounted(async () => {
 // @purpose Vote on the current card and swipe it away. Triggered directly by a rating tap (no confirm).
 // @invariant The queue advances (and the vote persists) IMMEDIATELY — the FLY_MS wait only keeps the
 //   ghost overlay alive for the animation. So the stack glides forward in the same beat the ghost flies.
-async function advanceCard(score) {
+async function advanceCard(score, ev) {
   if (isAnimating.value || !currentCard.value) return
+  // Drop focus so the tapped button doesn't stay visually engaged on the next card (touch :focus).
+  ev?.currentTarget?.blur?.()
   isAnimating.value = true
   const card = currentCard.value
   pendingReview.value = null
