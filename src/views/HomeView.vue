@@ -1,3 +1,8 @@
+<!--
+  @file: Home page — space list + create flow.
+  Uses an inline <nav> instead of <NavBar> component: home has a unique tab-bar nav and doesn't need
+  backPath or SyncDot, so reusing NavBar would require extra prop-drilling for no benefit.
+-->
 <template>
   <div>
     <nav class="nav">

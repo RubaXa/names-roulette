@@ -96,6 +96,16 @@
 </template>
 
 <script setup>
+// @file: Voting page — shows name cards one by one; user picks a rating 1–5, card animates out.
+// @consumers: router/index.js (route /space/:id/vote)
+//
+// Vue 3 fragment: no outer <div> wrapper — NavBar, .done-view, .voting-view, .loading-screen are
+// direct flex children of #app. Without this flex:1 on .view doesn't expand the card to fill height.
+//
+// isLoaded guard: onMounted loads names asynchronously, so at entry total > 0 but shuffledQueue = [].
+// Without the guard isDone = (total > 0 && queue.length === 0) = true for one frame → flash of "done" screen.
+// @invariant isLoaded is set to true only AFTER shuffledQueue is built; isDone checks isLoaded first.
+
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import NavBar from '@/components/NavBar.vue'

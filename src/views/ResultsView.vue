@@ -188,10 +188,16 @@
 // @file: Results page — shows closed-space voting results with 3 switchable visualizations.
 // @consumers: router/index.js (route /space/:id/results)
 //
+// Vue 3 fragment: no outer <div> wrapper — NavBar + .results-view.view are direct flex children of #app.
+// @invariant Without fragment, overflow-y:auto on .results-view doesn't activate (flex:1 chain broken).
+//
 // Visualization modes (vizMode):
 //   'likert' — diverging bar per name: neg votes (1-2) left of center, pos (3-5) right; each segment = one participant.
 //   'heat'   — grid table: rows = names sorted by score, columns = participants, cell = emoji on score-colored bg.
 //   'strip'  — dot plot: each name is a 1–5 axis, each participant is a colored dot at their score position.
+//
+// Penalty chips (.pchip-ab): rendered only in 'likert' and 'strip' rows — NOT in 'heat' (heat shows raw cells).
+// @invariant .pchips-row wrapper always rendered (no v-if on container) with min-height:13px → uniform row height.
 //
 // Four penalty sliders (0–100% each) — all affect only sort order; raw vote cells always show actual scores:
 //   @invariant score = avg − pPop − pDis − pSig − pLen (clamped to 0)
