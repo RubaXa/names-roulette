@@ -145,14 +145,14 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
    The leaving card is a separate "ghost" overlay (.swipe-*) that animates out while the
    stack underneath shifts each card one slot forward via the .card-wrap transition — the two
    motions overlap into one fluid swap. No keyframe runs on entry (cards are pre-mounted behind),
-   which is what killed the old pop-in jerk. Direction: 4,5→right · 3→up · 1,2→left. */
+   which is what killed the old pop-in jerk. Direction: 4,5→right · 3→down (reset) · 1,2→left. */
 @keyframes swipe-right{to{transform:translate(135%,-5%) rotate(15deg);opacity:0}}
 @keyframes swipe-left {to{transform:translate(-135%,-5%) rotate(-15deg);opacity:0}}
-@keyframes swipe-up   {to{transform:translateY(-128%) rotate(-2deg);opacity:0}}
+@keyframes swipe-down {to{transform:translateY(128%) rotate(2deg);opacity:0}}
 /* "Назад" rewind — mirror of the swipe-out: card slides back in from where it left */
 @keyframes rewind-right{from{transform:translate(135%,-5%) rotate(15deg);opacity:.3}to{transform:none;opacity:1}}
 @keyframes rewind-left {from{transform:translate(-135%,-5%) rotate(-15deg);opacity:.3}to{transform:none;opacity:1}}
-@keyframes rewind-up   {from{transform:translateY(-128%) rotate(-2deg);opacity:.3}to{transform:none;opacity:1}}
+@keyframes rewind-down {from{transform:translateY(128%) rotate(2deg);opacity:.3}to{transform:none;opacity:1}}
 .home-tabs{display:flex;background:var(--surface2);border-radius:12px;padding:3px;margin-bottom:20px}
 .home-tab{flex:1;padding:9px 4px;border-radius:9px;border:none;background:transparent;color:var(--t2);font-size:13px;font-weight:600;cursor:pointer;transition:all .15s}
 .home-tab.active{background:var(--surface);color:var(--text);box-shadow:0 1px 4px rgba(0,0,0,.2)}
@@ -166,10 +166,10 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 /* the leaving ghost flies out — animation overrides the slot transition while it plays */
 .card-wrap.swipe-right{animation:swipe-right .42s cubic-bezier(.45,0,.7,1) forwards}
 .card-wrap.swipe-left {animation:swipe-left .42s cubic-bezier(.45,0,.7,1) forwards}
-.card-wrap.swipe-up   {animation:swipe-up .42s cubic-bezier(.45,0,.7,1) forwards}
+.card-wrap.swipe-down {animation:swipe-down .42s cubic-bezier(.45,0,.7,1) forwards}
 .card-wrap.rewind-right{animation:rewind-right .42s cubic-bezier(.2,.7,.3,1) forwards}
 .card-wrap.rewind-left {animation:rewind-left .42s cubic-bezier(.2,.7,.3,1) forwards}
-.card-wrap.rewind-up   {animation:rewind-up .42s cubic-bezier(.2,.7,.3,1) forwards}
+.card-wrap.rewind-down {animation:rewind-down .42s cubic-bezier(.2,.7,.3,1) forwards}
 
 .rating-section{flex-shrink:0;margin-top:12px;position:relative;z-index:3}
 .rating-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}

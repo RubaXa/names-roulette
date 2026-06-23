@@ -120,7 +120,7 @@
 //   is copied into `flyingCard`, a ghost overlay that animates out (.swipe-*) at the same time, so
 //   leave + advance overlap into one motion. Keying by position instead caused remounts → pop-in +
 //   image reflash, which is the jerk/flicker we fixed.
-// @invariant Direction by score: 4,5 → swipe-right · 3 → swipe-up · 1,2 → swipe-left (see swipeDir).
+// @invariant Direction by score: 4,5 → swipe-right · 3 → swipe-down (reset) · 1,2 → swipe-left (see swipeDir).
 // @invariant Images are preloaded a few cards ahead (preloadImg watcher) so a photo is cached before
 //   its card surfaces — no flash when a card rises into view.
 // @invariant Review mode (after "← Назад"): goBack() removes the last vote from memory (kept in IDB),
@@ -201,9 +201,9 @@ function preloadImg(name) {
 }
 watch(votingQueue, q => q.slice(0, 5).forEach(c => preloadImg(c.name)), { immediate: true })
 
-// @purpose Map a score to its swipe direction: positive → right, neutral → up, negative → left.
+// @purpose Map a score to its swipe direction: positive → right, neutral → down (reset), negative → left.
 function swipeDir(score) {
-  return score >= 4 ? 'swipe-right' : score === 3 ? 'swipe-up' : 'swipe-left'
+  return score >= 4 ? 'swipe-right' : score === 3 ? 'swipe-down' : 'swipe-left'
 }
 
 onMounted(async () => {
