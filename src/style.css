@@ -14,7 +14,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 .nav-compact{height:36px;padding:0 12px}
 .nav-compact .nav-title{font-size:13px}
 .nav-compact .nav-back{font-size:16px;padding:2px 4px}
-.nav-compact .debug-btn,.nav-compact .sync-dot{display:none}
+.nav-compact .sync-dot{display:none}
 .nav-left{display:flex;align-items:center;gap:10px;min-width:0}
 .nav-back{background:none;border:none;color:var(--t2);font-size:20px;cursor:pointer;padding:4px 6px;border-radius:8px;line-height:1;flex-shrink:0}
 .nav-back:hover{color:var(--text);background:var(--surface)}

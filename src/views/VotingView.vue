@@ -1,9 +1,8 @@
 <template>
-  <div>
-    <NavBar :title="space?.title || 'Голосование'" back-path="/" :show-sync="true" :compact="true" />
+  <NavBar :title="space?.title || 'Голосование'" back-path="/" :show-sync="true" :compact="true" />
 
-    <!-- Done -->
-    <div v-if="isDone" class="done-view view">
+  <!-- Done -->
+  <div v-if="isDone" class="done-view view">
       <div class="done-icon">🎉</div>
       <div class="done-title">Вы оценили все {{ total }} имён!</div>
       <div class="done-sub">Результаты откроются, когда организатор завершит голосование</div>
@@ -90,10 +89,9 @@
       </div>
     </div>
 
-    <!-- Loading -->
-    <div v-else class="loading-screen">
-      <div class="spinner"></div>
-    </div>
+  <!-- Loading -->
+  <div v-else class="loading-screen">
+    <div class="spinner"></div>
   </div>
 </template>
 
@@ -117,6 +115,7 @@ const votes = ref({})       // { name: score } — loaded from IDB
 const history = ref([])     // [{ name, score }]
 const pendingReview = ref(null) // { name, originalScore }
 const shuffledQueue = ref([])
+const isLoaded = ref(false)
 const selectedScore = ref(null)
 const flyClass = ref(null)
 const nextRising = ref(false)
@@ -136,7 +135,7 @@ const currentCard = computed(() => votingQueue.value[0] || null)
 const nextCard = computed(() => votingQueue.value[1] || null)
 const total = computed(() => activeNames.value.length)
 const votedCount = computed(() => Object.keys(votes.value).length)
-const isDone = computed(() => total.value > 0 && votingQueue.value.length === 0)
+const isDone = computed(() => isLoaded.value && total.value > 0 && votingQueue.value.length === 0)
 const progressPct = computed(() => total.value ? (votedCount.value / total.value * 100).toFixed(1) : 0)
 const isCreator = computed(() => space.value?.creatorUid === user.value?.uid)
 
@@ -208,6 +207,7 @@ onMounted(async () => {
   // Build shuffled queue
   const active = getNamesByGroups(sp.nameGroups || ['all'])
   shuffledQueue.value = shuffle(active.map(n => n.name))
+  isLoaded.value = true
 })
 
 async function handleNext() {
