@@ -20,7 +20,7 @@ npm run build
 git checkout --orphan gh-pages-deploy
 git reset --hard
 cp -r dist/* .
-git add -f index.html assets/ chart.html
+git add -f index.html assets/ chart.html data/
 git commit -m "Deploy"
 git push origin gh-pages-deploy:gh-pages --force
 git branch -D gh-pages-deploy
@@ -45,6 +45,7 @@ GitHub Pages настроен на ветку `gh-pages`, папка `/ (root)`.
 ## Неочевидные места
 
 - [`src/firebase/config.js:1`](src/firebase/config.js) — Firebase грузится с CDN (gstatic), а не npm. Причина: GitHub Pages, нет серверного бандлера. Регион Firestore и авторизованный домен настроены только в Firebase Console (не в коде).
+- [`vite.config.js`](vite.config.js) — `data/` лежит в корне (не в `public/`), потому что туда пишут python-скрипты генерации. Инлайн-плагин `copy-data` копирует `names_enriched.json` + `images/` в `dist/data/` при сборке. Без него preview/prod теряют картинки. Поэтому деплой делает `git add data/`.
 - Архитектурные решения по каждому view — см. `// @file:` комментарии в начале `<script setup>` соответствующего файла.
 
 ## Тесты перед деплоем

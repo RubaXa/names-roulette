@@ -153,10 +153,9 @@ test.describe('Local-first voting (IndexedDB)', () => {
     for (let i = 0; i < 3; i++) {
       const nameEl = page.locator('.card-current .card-name')
       const name = await nameEl.textContent()
-      await page.locator('.r-btn').nth(3).click() // score=4 "Нравится"
-      await page.locator('#btn-next').click()
+      await page.locator('.r-btn').nth(3).click() // score=4 "Нравится" — instant advance
       votes.push(name.trim())
-      await page.waitForTimeout(300)
+      await page.waitForTimeout(400)
     }
 
     // Verify IDB has all 3 votes
@@ -188,8 +187,7 @@ test.describe('Local-first voting (IndexedDB)', () => {
 
     // Block and vote
     await page.evaluate(() => window.__e2e.blockSync(true))
-    await page.locator('.r-btn').nth(4).click() // Обожаю
-    await page.locator('#btn-next').click()
+    await page.locator('.r-btn').nth(4).click() // Обожаю — instant advance
     await page.waitForTimeout(400)
 
     // Unblock — Firebase calls will fail (fake user) but outbox drain runs
@@ -212,9 +210,8 @@ test.describe('Local-first voting (IndexedDB)', () => {
 
     // Vote on 5 names
     for (let i = 0; i < 5; i++) {
-      await page.locator('.r-btn').nth(2).click() // Нейтрально
-      await page.locator('#btn-next').click()
-      await page.waitForTimeout(200)
+      await page.locator('.r-btn').nth(2).click() // Нейтрально — instant advance
+      await page.waitForTimeout(400)
     }
 
     const before = await getIDBVotes(page, spaceId)
@@ -244,11 +241,14 @@ test.describe('Voting UX', () => {
     await page.evaluate(() => window.__e2e.blockSync(true))
   }
 
-  test('Далее disabled until rating selected', async ({ page }) => {
+  test('rating tap instantly advances (no confirm button)', async ({ page }) => {
     await goToVoting(page)
-    await expect(page.locator('#btn-next')).toBeDisabled()
-    await page.locator('.r-btn').nth(4).click()
-    await expect(page.locator('#btn-next')).toBeEnabled()
+    await expect(page.locator('#btn-next')).toHaveCount(0) // legacy mechanic: no "Далее" button
+    const first = (await page.locator('.card-current .card-name').textContent()).trim()
+    await page.locator('.r-btn').nth(4).click() // ❤️ Обожаю
+    await page.waitForTimeout(400)
+    const second = (await page.locator('.card-current .card-name').textContent()).trim()
+    expect(second).not.toBe(first)
   })
 
   test('progress bar advances with each vote', async ({ page }) => {
@@ -256,22 +256,26 @@ test.describe('Voting UX', () => {
     const progressBefore = await page.locator('.progress-text').textContent()
     expect(progressBefore).toBe('0/243')
 
-    await page.locator('.r-btn').nth(3).click()
-    await page.locator('#btn-next').click()
-    await page.waitForTimeout(300)
+    await page.locator('.r-btn').nth(3).click() // instant advance
+    await page.waitForTimeout(400)
 
     const progressAfter = await page.locator('.progress-text').textContent()
     expect(progressAfter).toBe('1/243')
     await page.screenshot({ path: 'tests/screenshots/10_progress_advance.png' })
   })
 
-  test('skip moves name to end of queue', async ({ page }) => {
+  test('back button restores previous card for review', async ({ page }) => {
     await goToVoting(page)
-    const firstName = await page.locator('.card-current .card-name').textContent()
-    await page.locator('[data-testid="card-skip"]').click()
-    const secondName = await page.locator('.card-current .card-name').textContent()
-    expect(secondName.trim()).not.toBe(firstName.trim())
-    await page.screenshot({ path: 'tests/screenshots/11_skip_name.png' })
+    const firstName = (await page.locator('.card-current .card-name').textContent()).trim()
+    await page.locator('.r-btn').nth(4).click() // ❤️ vote → advance
+    await page.waitForTimeout(400)
+    await page.locator('.card-current .card-back-btn').click()
+    const reviewName = (await page.locator('.card-current .card-name').textContent()).trim()
+    expect(reviewName).toBe(firstName)
+    // prior rating highlighted + "Вперёд →" available in review mode
+    await expect(page.locator('.r-btn.active')).toHaveCount(1)
+    await expect(page.locator('.card-current .card-skip-btn')).toBeVisible()
+    await page.screenshot({ path: 'tests/screenshots/11_back_review.png' })
   })
 
   test('history shows voted names', async ({ page }) => {
@@ -279,12 +283,10 @@ test.describe('Voting UX', () => {
     const hash = await page.evaluate(() => location.hash)
     const spaceId = hash.match(/\/space\/([^/]+)/)?.[1]
 
-    await page.locator('.r-btn').nth(4).click()
-    await page.locator('#btn-next').click()
-    await page.waitForTimeout(300)
-    await page.locator('.r-btn').nth(1).click()
-    await page.locator('#btn-next').click()
-    await page.waitForTimeout(300)
+    await page.locator('.r-btn').nth(4).click() // instant advance
+    await page.waitForTimeout(400)
+    await page.locator('.r-btn').nth(1).click() // instant advance
+    await page.waitForTimeout(400)
 
     await page.locator(`a[data-nav="/space/${spaceId}/history"]`).click()
     await page.waitForSelector('.hist-list')
@@ -295,9 +297,8 @@ test.describe('Voting UX', () => {
 
   test('re-vote from history removes name from voted list', async ({ page }) => {
     await goToVoting(page)
-    await page.locator('.r-btn').first().click()
-    await page.locator('#btn-next').click()
-    await page.waitForTimeout(300)
+    await page.locator('.r-btn').first().click() // instant advance
+    await page.waitForTimeout(400)
 
     const hash = await page.evaluate(() => location.hash)
     const spaceId = hash.match(/\/space\/([^/]+)/)?.[1]

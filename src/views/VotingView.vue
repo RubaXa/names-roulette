@@ -51,7 +51,7 @@
             <div class="card-overlay"></div>
             <div class="card-top-btns">
               <button class="card-top-btn card-back-btn" :disabled="!history.length || isAnimating" @click="goBack">← Назад</button>
-              <button class="card-top-btn" data-testid="card-skip" :disabled="isAnimating" @click="skipCard">↩ Пропустить</button>
+              <button v-if="isReviewing" class="card-top-btn card-skip-btn" data-testid="card-forward" :disabled="isAnimating" @click="advanceKeep">Вперёд →</button>
             </div>
             <div class="card-content">
               <div class="card-name">{{ currentCard.name }}</div>
@@ -71,21 +71,14 @@
             v-for="r in RATINGS"
             :key="r.score"
             class="r-btn"
-            :class="{ active: selectedScore === r.score }"
+            :class="{ active: isReviewing && pendingReview.originalScore === r.score }"
             :disabled="isAnimating"
-            @click="selectedScore = r.score"
+            @click="advanceCard(r.score)"
           >
             <span class="r-emoji">{{ r.emoji }}</span>
             <span class="r-lbl">{{ r.label }}</span>
           </button>
         </div>
-        <button
-          id="btn-next"
-          class="btn btn-primary btn-full"
-          style="margin-top:12px"
-          :disabled="selectedScore === null || isAnimating"
-          @click="handleNext"
-        >Далее</button>
       </div>
     </div>
 
@@ -105,6 +98,16 @@
 // isLoaded guard: onMounted loads names asynchronously, so at entry total > 0 but shuffledQueue = [].
 // Without the guard isDone = (total > 0 && queue.length === 0) = true for one frame → flash of "done" screen.
 // @invariant isLoaded is set to true only AFTER shuffledQueue is built; isDone checks isLoaded first.
+//
+// Voting mechanic (Tinder-style, mirrors legacy index.legacy.html — DO NOT add a "Next"/"Skip" button):
+// @invariant Tapping a rating (.r-btn) INSTANTLY advances — advanceCard(score) flies the card away.
+//   There is NO "Далее"/confirm step and NO "Пропустить"/skip button; both were spec violations.
+// @invariant Two-card deck: .card-next sits behind .card-current; on advance current flies out
+//   (fly-right for score≥4, fly-down for score≤3) while next .rising-s into place (CSS .25s).
+// @invariant Review mode (after "← Назад"): goBack() removes the last vote from memory (kept in IDB),
+//   re-queues that name, sets pendingReview. Then isReviewing=true → the card shows a "Вперёд →"
+//   button (advanceKeep, re-confirms the same score) and the prior rating button is highlighted.
+//   Tapping a different rating overwrites via advanceCard.
 
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
@@ -126,7 +129,6 @@ const history = ref([])     // [{ name, score }]
 const pendingReview = ref(null) // { name, originalScore }
 const shuffledQueue = ref([])
 const isLoaded = ref(false)
-const selectedScore = ref(null)
 const flyClass = ref(null)
 const nextRising = ref(false)
 const isAnimating = ref(false)
@@ -148,6 +150,9 @@ const votedCount = computed(() => Object.keys(votes.value).length)
 const isDone = computed(() => isLoaded.value && total.value > 0 && votingQueue.value.length === 0)
 const progressPct = computed(() => total.value ? (votedCount.value / total.value * 100).toFixed(1) : 0)
 const isCreator = computed(() => space.value?.creatorUid === user.value?.uid)
+// @purpose True when the current card is the one we stepped back to review — drives "Вперёд →"
+//   button visibility and the highlighted rating. See goBack/advanceKeep.
+const isReviewing = computed(() => !!pendingReview.value && pendingReview.value.name === currentCard.value?.name)
 
 function cardBg(nameData) {
   const all = getNamesByGroups(['all'])
@@ -220,21 +225,21 @@ onMounted(async () => {
   isLoaded.value = true
 })
 
-async function handleNext() {
-  if (selectedScore.value === null || isAnimating.value || !currentCard.value) return
+// @purpose Vote on the current card and fly it away. Triggered directly by a rating tap (no confirm step).
+// @invariant dir = score≥4 ? 'right' : 'down' (matches RATINGS ❤️/👍 → right, 😐/👎/❌ → down).
+// @invariant 320ms matches the legacy flyAndAdvance finish timeout (fly-right .28s / fly-down .30s + margin).
+async function advanceCard(score) {
+  if (isAnimating.value || !currentCard.value) return
   isAnimating.value = true
   const name = currentCard.value.name
-  const score = selectedScore.value
-
-  history.value.push({ name, score })
   pendingReview.value = null
-  selectedScore.value = null
+  history.value.push({ name, score })
 
   const dir = score >= 4 ? 'right' : 'down'
   flyClass.value = 'fly-' + dir
   nextRising.value = true
 
-  await new Promise(r => setTimeout(r, 300))
+  await new Promise(r => setTimeout(r, 320))
 
   // Advance queue by marking as voted
   votes.value = { ...votes.value, [name]: score }
@@ -246,6 +251,27 @@ async function handleNext() {
   saveVote(name, score)
 }
 
+// @purpose "Вперёд →" in review mode: re-confirm the previous score unchanged and move on.
+async function advanceKeep() {
+  if (isAnimating.value || !pendingReview.value) return
+  isAnimating.value = true
+  const { name, originalScore } = pendingReview.value
+  pendingReview.value = null
+  history.value.push({ name, score: originalScore })
+
+  flyClass.value = 'fly-right'
+  nextRising.value = true
+
+  await new Promise(r => setTimeout(r, 320))
+
+  votes.value = { ...votes.value, [name]: originalScore }
+  flyClass.value = null
+  nextRising.value = false
+  isAnimating.value = false
+
+  saveVote(name, originalScore)
+}
+
 async function saveVote(name, score) {
   await dbSaveVote(spaceId, name, score)
   await dbAddOutbox({ type: 'VOTE', spaceId, name, score })
@@ -254,6 +280,9 @@ async function saveVote(name, score) {
   if (sp) { sp._progress = Object.keys(votes.value).length; await dbSaveSpace(sp) }
 }
 
+// @purpose "← Назад": step back to the previously voted card to review/change it.
+// @invariant The vote stays in IDB; only removed from the in-memory `votes` so the name re-enters
+//   the queue at the front with pendingReview set (→ isReviewing → "Вперёд →" + highlighted rating).
 function goBack() {
   if (!history.value.length || isAnimating.value) return
   if (pendingReview.value) {
@@ -262,16 +291,9 @@ function goBack() {
   }
   const last = history.value.pop()
   pendingReview.value = { name: last.name, originalScore: last.score }
-  selectedScore.value = last.score
   const { [last.name]: _, ...rest } = votes.value
   votes.value = rest
   // Put the name back at front of queue
   shuffledQueue.value = [last.name, ...shuffledQueue.value.filter(n => n !== last.name)]
-}
-
-function skipCard() {
-  if (isAnimating.value || !currentCard.value) return
-  const name = currentCard.value.name
-  shuffledQueue.value = [...shuffledQueue.value.filter(n => n !== name), name]
 }
 </script>
